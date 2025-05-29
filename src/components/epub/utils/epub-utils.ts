@@ -112,6 +112,57 @@ export class EpubManager {
     }
   }
 
+  setupThemes(rendition: Rendition): void {
+    rendition.themes.register("dark", {
+      color: "#fff",
+      "background-color": "#1a1a1a",
+      html: {
+        "-webkit-filter": "invert(1) hue-rotate(180deg)",
+        filter: "invert(1) hue-rotate(180deg)",
+      },
+      img: {
+        "-webkit-filter": "invert(1) hue-rotate(180deg)",
+        filter: "invert(1) hue-rotate(180deg)",
+      },
+    });
+
+    rendition.themes.register("light", {
+      color: "#000",
+      "background-color": "#fff",
+      html: {
+        "-webkit-filter": "invert(0) hue-rotate(180deg)",
+        filter: "invert(0) hue-rotate(180deg)",
+      },
+    });
+
+    rendition.themes.register("sepia", {
+      color: "#5f4b32",
+      "background-color": "#f4ecd8",
+      html: {
+        "-webkit-filter": "invert(0) hue-rotate(180deg)",
+        filter: "invert(0) hue-rotate(180deg)",
+      },
+    });
+
+    rendition.themes.default({
+      color: "#000000",
+      "background-color": "#ffffff",
+      html: {
+        "-webkit-filter": "invert(0) hue-rotate(180deg)",
+        filter: "invert(0) hue-rotate(180deg)",
+      },
+      img: {
+        "-webkit-filter": "invert(0) hue-rotate(180deg)",
+        filter: "invert(0) hue-rotate(180deg)",
+      },
+    });
+  }
+
+  /**
+   * Creates a rendition for the loaded book.
+   * @param element The HTML element to render the book into.
+   * @param options Rendition options including width, height, flow type, and styles.
+   */
   async createRendition(
     element: HTMLElement,
     options: RenditionOptions
@@ -149,6 +200,8 @@ export class EpubManager {
         this.rendition?.themes.default({ [property]: value });
       });
     }
+
+    this.setupThemes(this.rendition);
 
     // Display at the stored location or start from beginning
     await this.rendition.display(currentLocation);
@@ -293,42 +346,46 @@ export class EpubManager {
 
   updateTheme(theme: "light" | "dark" | "sepia"): void {
     if (!this.rendition) return;
+    console.log(`Setting theme to ${theme}`, this.rendition);
 
-    // Reset previous theme styles
-    this.rendition.themes.default({
-      color: "",
-      "background-color": "",
-      "font-size": "",
-    });
+    // // Reset previous theme styles
+    // this.rendition.themes.default({
+    //   color: "",
+    //   "background-color": "",
+    //   "font-size": "",
+    // });
 
     // Apply new theme styles
     switch (theme) {
       case "dark":
-        this.rendition.themes.default({
-          color: "#ffffff",
-          "background-color": "#1a1a1a",
-        });
+        this.rendition.themes.select("dark");
         break;
       case "sepia":
-        this.rendition.themes.default({
-          color: "#5f4b32",
-          "background-color": "#f4ecd8",
-        });
+        this.rendition.themes.select("sepia");
         break;
       case "light":
       default:
-        this.rendition.themes.default({
-          color: "#000000",
-          "background-color": "#ffffff",
-        });
+        this.rendition.themes.select("light");
         break;
     }
   }
 
   updateFontSize(fontSize: number): void {
     if (!this.rendition) return;
+    // Convert percentage to relative em units
+    // 100% = 1em, 120% = 1.2em, etc.
+    const emSize = fontSize / 100;
+    console.log(`Setting font size to ${emSize}em`);
+
     this.rendition.themes.default({
-      "font-size": `${fontSize}%`,
+      "font-size": `${emSize}em`,
+      // Add styles to ensure proper inheritance
+      body: {
+        "font-size": `${emSize}em !important`,
+      },
+      "p, div, span, article, section": {
+        "font-size": "inherit",
+      },
     });
   }
 }
