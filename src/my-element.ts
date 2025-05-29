@@ -1,8 +1,9 @@
 import { LitElement, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import "./components/document-viewer";
+
 /**
- * An example element.
+ * A smart document viewer that supports multiple file formats.
  *
  * @slot - This element has a slot
  * @csspart button - The button
@@ -10,22 +11,22 @@ import "./components/document-viewer";
 @customElement("my-element")
 export class MyElement extends LitElement {
   /**
-   * Copy for the read the docs hint.
-   */
-  @property()
-  docsHint = "Click on the Vite and Lit logos to learn more";
-
-  /**
-   * The string of the document to be displayed.
+   * The URL or File object of the document to be displayed.
    */
   @property({ type: String })
   src = "";
 
   render() {
-    return html` <document-viewer src="${this.src}"> </document-viewer> `;
+    return html`<document-viewer .src=${this.src}></document-viewer>`;
   }
 
-  static styles = css``;
+  static styles = css`
+    :host {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  `;
 }
 
 declare global {
