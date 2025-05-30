@@ -1,7 +1,6 @@
 {
   "name": "@quincarter/document-viewer",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "files": [
     "lib/components",
@@ -12,16 +11,17 @@
     "dev": "vite",
     "start": "vite",
     "build": "rimraf lib && tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "changeset:add": "changeset add && changeset version"
   },
   "dependencies": {
-    "@changesets/cli": "^2.29.4",
     "@hyzyla/pdfium": "^2.1.7",
     "epubjs": "^0.3.93",
     "jszip": "^3.10.1",
     "lit": "^3.3.0"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.4",
     "rimraf": "^6.0.1",
     "typescript": "~5.8.3",
     "vite": "^6.3.5",
