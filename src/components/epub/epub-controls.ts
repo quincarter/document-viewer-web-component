@@ -104,16 +104,6 @@ export class EpubControls extends LitElement {
     }
   }
 
-  private _toggleFlowType() {
-    this.flowType =
-      this.flowType === "paginated" ? "scrolled-continuous" : "paginated";
-    this.dispatchEvent(
-      new CustomEvent("flow-type-changed", {
-        detail: { flowType: this.flowType },
-      })
-    );
-  }
-
   private _prevPage() {
     this.dispatchEvent(new CustomEvent("prev-page"));
   }

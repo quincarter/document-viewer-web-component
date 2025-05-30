@@ -3,10 +3,14 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "files": [
+    "lib/components",
+    "README.md"
+  ],
   "scripts": {
     "dev": "vite",
     "start": "vite",
-    "build": "tsc && vite build",
+    "build": "rimraf lib && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -16,6 +20,7 @@
     "lit": "^3.3.0"
   },
   "devDependencies": {
+    "rimraf": "^6.0.1",
     "typescript": "~5.8.3",
     "vite": "^6.3.5",
     "vite-plugin-top-level-await": "^1.5.0",
