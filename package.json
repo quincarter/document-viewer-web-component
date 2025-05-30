@@ -1,6 +1,12 @@
 {
   "name": "@quincarter/document-viewer",
   "version": "0.0.1",
+  "private": false,
+  "description": "A document viewer for PDF and EPUB files, built with Lit and Vite.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quincarter/document-viewer-web-component.git"
+  },
   "type": "module",
   "files": [
     "lib/components",
