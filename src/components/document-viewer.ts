@@ -4,13 +4,17 @@ import { customElement, property, state } from "lit/decorators.js";
 // Import viewers
 import "./pdf/pdf-viewer";
 import "./epub/epub-viewer";
+import "./cbz/cbz-viewer";
+import { DocumentViewerStyles } from "./document-viewer.styles";
 
-type SupportedFileType = "pdf" | "epub" | "unknown";
+type SupportedFileType = "pdf" | "epub" | "cbz" | "unknown";
 
 @customElement("document-viewer")
 export class DocumentRouter extends LitElement {
   @property({ type: String })
-  src: string | null = null;
+  src?: string;
+
+  static styles = [DocumentViewerStyles];
 
   @state()
   private fileType: SupportedFileType = "unknown";
@@ -49,15 +53,21 @@ export class DocumentRouter extends LitElement {
         header[4] === 0x2d; // -
 
       // Check for EPUB signature (PK\x03\x04 for ZIP, which EPUB uses)
-      const isEPUB =
+      const isPKZip =
         buffer.byteLength > 58 &&
         String.fromCharCode(...new Uint8Array(buffer.slice(0, 4))) ===
           "PK\x03\x04";
 
+      // Check the file extension if it's a ZIP-based format (EPUB or CBZ)
+      const url = new URL(this.src, window.location.href);
+      const extension = url.pathname.split(".").pop()?.toLowerCase();
+
       if (isPDF) {
         this.fileType = "pdf";
-      } else if (isEPUB) {
+      } else if (isPKZip && extension === "epub") {
         this.fileType = "epub";
+      } else if (isPKZip && extension === "cbz") {
+        this.fileType = "cbz";
       } else {
         this.fileType = "unknown";
         this.error = "Unsupported file format";
@@ -71,12 +81,14 @@ export class DocumentRouter extends LitElement {
   private renderViewer() {
     switch (this.fileType) {
       case "pdf":
-        return html`<pdf-viewer .src=${this.src}></pdf-viewer>`;
+        return html`<pdf-viewer .src=${this.src || null}></pdf-viewer>`;
       case "epub":
-        return html`<epub-viewer .src=${this.src}></epub-viewer>`;
+        return html`<epub-viewer .src=${this.src || null}></epub-viewer>`;
+      case "cbz":
+        return html`<cbz-viewer .src=${this.src}></cbz-viewer>`;
       case "unknown":
         return html`<div class="error">
-          ${this.error || "Unknown or unsupported file type"}
+          ${this.error ?? "Unknown or unsupported file format"}
         </div>`;
     }
   }

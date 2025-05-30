@@ -12,6 +12,7 @@
   "dependencies": {
     "@hyzyla/pdfium": "^2.1.7",
     "epubjs": "^0.3.93",
+    "jszip": "^3.10.1",
     "lit": "^3.3.0"
   },
   "devDependencies": {

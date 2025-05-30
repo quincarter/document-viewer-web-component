@@ -1,22 +1,10 @@
 import { LitElement, html } from "lit";
 import { customElement, state, property } from "lit/decorators.js";
-import type { EpubFlowType } from "./utils/epub-utils";
 import { EpubConrolsStyles } from "./epub-controls.styles";
+import type { EpubFlowType } from "./utils/epub-utils";
 import "../common/popover-menu";
 import "./epub-text-controls";
-
-interface PageChangedEvent extends CustomEvent {
-  detail: {
-    currentPage: number;
-    totalPages: number;
-  };
-}
-
-interface FlowTypeChangedEvent extends CustomEvent {
-  detail: {
-    flowType: EpubFlowType;
-  };
-}
+import type { PageChangedEvent, FlowTypeChangedEvent } from "./interfaces";
 
 @customElement("epub-controls")
 export class EpubControls extends LitElement {
@@ -33,6 +21,12 @@ export class EpubControls extends LitElement {
   @state() private flowType: EpubFlowType = "paginated";
   @state() private fontSize: number = 100;
   @state() private theme: "light" | "dark" | "sepia" = "light";
+  @property({ type: Boolean })
+  supportsDualPage: boolean = false;
+
+  @property({ type: Boolean })
+  isDualPage: boolean = false;
+
   private hideControlsTimer: number | undefined;
 
   private _onPageChanged = (evt: PageChangedEvent) => {
@@ -111,7 +105,8 @@ export class EpubControls extends LitElement {
   }
 
   private _toggleFlowType() {
-    this.flowType = this.flowType === "paginated" ? "scrolled" : "paginated";
+    this.flowType =
+      this.flowType === "paginated" ? "scrolled-continuous" : "paginated";
     this.dispatchEvent(
       new CustomEvent("flow-type-changed", {
         detail: { flowType: this.flowType },
@@ -163,6 +158,19 @@ export class EpubControls extends LitElement {
     );
   }
 
+  // Add the handler for view mode changes
+  private _handleViewModeChange = (e: CustomEvent) => {
+    const { isDualPage } = e.detail;
+    this.isDualPage = isDualPage;
+    this.dispatchEvent(
+      new CustomEvent("view-mode-changed", {
+        detail: { isDualPage },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  };
+
   render() {
     return html`
       <div class="controls-container">
@@ -202,9 +210,12 @@ export class EpubControls extends LitElement {
                 .fontSize=${this.fontSize}
                 .theme=${this.theme}
                 .flowType=${this.flowType}
+                .supportsDualPage=${this.supportsDualPage}
+                .isDualPage=${this.isDualPage}
                 @font-size-changed=${this._handleFontSizeChange}
                 @theme-changed=${this._handleThemeChange}
                 @flow-type-changed=${this._handleFlowTypeChange}
+                @view-mode-changed=${this._handleViewModeChange}
               ></epub-text-controls>
             </popover-menu>
           </div>

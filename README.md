@@ -10,7 +10,7 @@ This project's goal is to give an all in one approach to rendering documents. Ha
 Document support is as follows:
 - PDF - Supported
 - ePub - Supported
-- CBZ (Comic Books) - Coming soon
+- CBZ (Comic Books) - Supported
 - Office Files - Coming Soon (doc/docx/ppt/pptx)
 
 ## Development

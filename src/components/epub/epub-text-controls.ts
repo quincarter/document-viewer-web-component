@@ -1,4 +1,4 @@
-import { LitElement, html, css } from "lit";
+import { LitElement, html, css, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import type { EpubFlowType } from "./utils/epub-utils";
 
@@ -149,6 +149,12 @@ export class EpubTextControls extends LitElement {
   @property({ type: String })
   flowType: EpubFlowType = "paginated";
 
+  @property({ type: Boolean })
+  supportsDualPage: boolean = false;
+
+  @property({ type: Boolean })
+  isDualPage: boolean = false;
+
   render() {
     return html`
       <div class="text-controls">
@@ -213,6 +219,28 @@ export class EpubTextControls extends LitElement {
             </button>
           </div>
         </div>
+
+        ${this.supportsDualPage
+          ? html`
+              <div class="control-group">
+                <h3>View Mode</h3>
+                <div class="button-group">
+                  <button
+                    class="${!this.isDualPage ? "active" : ""}"
+                    @click=${() => this._handleViewModeChange(false)}
+                  >
+                    Single Page
+                  </button>
+                  <button
+                    class="${this.isDualPage ? "active" : ""}"
+                    @click=${() => this._handleViewModeChange(true)}
+                  >
+                    Dual Page
+                  </button>
+                </div>
+              </div>
+            `
+          : nothing}
       </div>
     `;
   }
@@ -245,6 +273,17 @@ export class EpubTextControls extends LitElement {
     this.dispatchEvent(
       new CustomEvent("flow-type-changed", {
         detail: { flowType },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  private _handleViewModeChange(isDualPage: boolean) {
+    this.isDualPage = isDualPage;
+    this.dispatchEvent(
+      new CustomEvent("view-mode-changed", {
+        detail: { isDualPage },
         bubbles: true,
         composed: true,
       })

@@ -66,11 +66,6 @@ self.onmessage = async (event: MessageEvent<any>) => {
             currentDocumentId = null;
           }
 
-          console.log("Loading PDF:", {
-            size: pdfBuffer.byteLength,
-            validHeader: true,
-          });
-
           // Convert to Uint8Array for PDFium
           const pdfData = new Uint8Array(pdfBuffer);
 

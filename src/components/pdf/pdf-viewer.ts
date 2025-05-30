@@ -60,7 +60,6 @@ export class DocumentViewer extends LitElement {
 
     // Manually construct absolute URL for WASM file
     const wasmUrl = new URL(pdfiumWasmUrl, window.location.origin).toString();
-    console.log("Loading WASM from:", wasmUrl);
 
     this._sendMessageToWorker(this._pdfWorker, "init", {
       wasmUrl: wasmUrl,
@@ -251,7 +250,6 @@ export class DocumentViewer extends LitElement {
 
       case "pdfLoaded":
         if (success) {
-          console.log("PDF loaded successfully", data);
           this._totalPages = data.pageCount;
           this._currentDocumentId = data.documentId;
           this._isLoading = false;
@@ -264,7 +262,6 @@ export class DocumentViewer extends LitElement {
 
       case "pageRendered":
         if (success && data.imageData) {
-          console.log(`Page ${this._currentPageNumber} rendered`);
           this._drawPageToCanvas(data.imageData, data.width, data.height);
           this._isLoading = false;
         } else {
