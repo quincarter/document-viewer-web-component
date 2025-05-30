@@ -2,7 +2,7 @@
 
 This project's goal is to give an all in one approach to rendering documents. Have you ever been overwhelemed developing a product that needs support for more than one file type? Well this document viewer should eventually be the go to for you once i build the remaining support for the remaining file types!
 
-- The PDF Viewer is using a wasm binary for rendering that is highly optimized for rendering.
+- The PDF Viewer is using a wasm binary for rendering that is highly optimized for rendering. Faster than the PDF.js alternative. 
 - The ePub viewer is written entirely in javascript and runs very fast, rendering pages as html for easy highlighting and manipulation.
 - CBZ Files are basically just zipped image payloads arranged in order for a book to make sense. `jszip` is the secret sauce running in a web worker for this to be performant, which extracts images on the fly and renders them to the page.
 
