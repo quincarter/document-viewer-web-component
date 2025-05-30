@@ -7,6 +7,9 @@
     "type": "git",
     "url": "https://github.com/quincarter/document-viewer-web-component.git"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "files": [
     "lib/components",
