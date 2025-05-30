@@ -1,10 +1,11 @@
 {
-  "name": "my-viewer",
+  "name": "@quincarter/document-viewer",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "files": [
     "lib/components",
+    "lib/index.js",
     "README.md"
   ],
   "scripts": {
@@ -14,6 +15,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@changesets/cli": "^2.29.4",
     "@hyzyla/pdfium": "^2.1.7",
     "epubjs": "^0.3.93",
     "jszip": "^3.10.1",

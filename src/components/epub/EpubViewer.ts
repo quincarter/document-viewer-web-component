@@ -1,13 +1,13 @@
 import { LitElement, html } from "lit";
-import { customElement, property, query, state } from "lit/decorators.js";
-import type {
-  EpubFlowType,
-  NavItem,
-  EpubViewerSettings,
-} from "./utils/epub-utils";
-import { EpubManager, loadSettings, saveSettings } from "./utils/epub-utils";
+import { property, query, state } from "lit/decorators.js";
 import "./epub-controls";
 import { EpubViewerStyles } from "./epub-viewer.styles";
+import type {
+    EpubFlowType,
+    EpubViewerSettings,
+    NavItem,
+} from "./utils/epub-utils";
+import { EpubManager, loadSettings, saveSettings } from "./utils/epub-utils";
 
 export class EpubViewer extends LitElement {
   @property({ type: String })

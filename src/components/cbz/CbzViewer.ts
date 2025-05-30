@@ -1,5 +1,5 @@
 import { LitElement, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import { CbzViewerStyles } from "./cbz-viewer.styles";
 // Using CustomEvent for view mode changes
 import "./cbz-controls";
