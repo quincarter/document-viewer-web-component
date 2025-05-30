@@ -8,6 +8,9 @@
     "skipLibCheck": true,
 
     /* Bundler mode */
+    "emitDecoratorMetadata": true,
+    "sourceMap": true,
+    "declaration": true,
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

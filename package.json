@@ -1,6 +1,16 @@
 {
   "name": "@quincarter/document-viewer",
-  "version": "0.0.1",
+  "version": "0.0.3",
+  "license": "MIT",
+  "author": "Quin Carter <quin.carter@gmail.com>",
+  "keywords": [
+    "web-component",
+    "lit",
+    "pdf",
+    "epub",
+    "viewer",
+    "document-viewer"
+  ],
   "private": false,
   "description": "A document viewer for PDF and EPUB files, built with Lit and Vite.",
   "repository": {
@@ -13,7 +23,10 @@
   "type": "module",
   "files": [
     "lib/components",
+    "lib/utils",
     "lib/index.js",
+    "lib/index.d.ts",
+    "lib/index.js.map",
     "README.md"
   ],
   "scripts": {

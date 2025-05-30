@@ -53,9 +53,9 @@ You can import and use the pre-defined elements:
 
 ```typescript
 // Import specific viewers as needed
-import { CbzViewer } from '@quincarter/document-viewer/components/cbz/cbz-viewer';
-import { EpubViewer } from '@quincarter/document-viewer/components/epub/epub-viewer';
-import { PdfViewer } from '@quincarter/document-viewer/components/pdf/pdf-viewer';
+import { CbzViewer } from "@quincarter/document-viewer/components/cbz/cbz-viewer";
+import { EpubViewer } from "@quincarter/document-viewer/components/epub/epub-viewer";
+import { PdfViewer } from "@quincarter/document-viewer/components/pdf/pdf-viewer";
 ```
 
 ```html
@@ -69,25 +69,25 @@ Or define your own custom element names:
 
 ```typescript
 // Import the classes (note: without the decorators)
-import { CbzViewer } from '@quincarter/document-viewer/components/cbz/CbzViewer';
-import { EpubViewer } from '@quincarter/document-viewer/components/epub/EpubViewer';
-import { PdfViewer } from '@quincarter/document-viewer/components/pdf/PdfViewer';
+import { CbzViewer } from "@quincarter/document-viewer/components/cbz/CbzViewer";
+import { EpubViewer } from "@quincarter/document-viewer/components/epub/EpubViewer";
+import { PdfViewer } from "@quincarter/document-viewer/components/pdf/PdfViewer";
 
 // Define your own custom elements
-customElements.define('my-cbz-viewer', CbzViewer);
-customElements.define('my-epub-viewer', EpubViewer);
-customElements.define('my-pdf-viewer', PdfViewer);
+customElements.define("my-cbz-viewer", CbzViewer);
+customElements.define("my-epub-viewer", EpubViewer);
+customElements.define("my-pdf-viewer", PdfViewer);
 
 // Use in HTML with your custom names
-<my-cbz-viewer src="path/to/comic.cbz"></my-cbz-viewer>
+<my-cbz-viewer src="path/to/comic.cbz"></my-cbz-viewer>;
 ```
 
 You can also use the classes directly in your code:
 
 ```typescript
 // Programmatic usage
-const cbzViewer = document.createElement('cbz-viewer');
-cbzViewer.src = 'path/to/comic.cbz';
+const cbzViewer = document.createElement("cbz-viewer");
+cbzViewer.src = "path/to/comic.cbz";
 document.body.appendChild(cbzViewer);
 ```
 

@@ -6,3 +6,12 @@ customElements.get("epub-viewer") ||
 export { EpubViewer };
 export { EpubControls } from "./epub-controls";
 export { EpubViewerStyles } from "./epub-viewer.styles";
+export {
+  EpubManager,
+  loadSettings,
+  saveSettings,
+  type EpubFlowType,
+  type NavItem,
+  type RenditionOptions,
+  type EpubViewerSettings,
+} from "./utils/epub-utils";
