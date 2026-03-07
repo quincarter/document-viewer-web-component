@@ -1,10 +1,10 @@
 // src/document-viewer.ts
 
 // Import WASM URLs (Vite syntax)
-import pdfiumWasmUrl from "@hyzyla/pdfium/pdfium.wasm?url";
 import { html, LitElement, type PropertyValueMap } from "lit";
 import { property, query, state } from "lit/decorators.js";
 import { PdfViewerStyles } from "./pdf-viewer.styles";
+import pdfiumWasmUrl from "@hyzyla/pdfium/pdfium.wasm?url";
 // Import worker instances (Vite inline worker syntax)
 import PdfWorker from "./workers/pdf.worker?worker&inline";
 

@@ -1,31 +1,101 @@
 // vite.config.ts
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
+import type { Plugin } from "vite";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
+import dts from "vite-plugin-dts";
+
+/**
+ * Resolves `@hyzyla/pdfium/pdfium.wasm?url` to a base64 data URL at build time.
+ * This avoids publishing Vite-specific `?url` imports that break for consumers
+ * using non-Vite bundlers.
+ */
+function pdfiumWasmInlinePlugin(): Plugin {
+  return {
+    name: "pdfium-wasm-inline",
+    enforce: "pre",
+    resolveId(source) {
+      if (source.includes("pdfium.wasm") && source.includes("?url")) {
+        return "\0pdfium-wasm-url";
+      }
+    },
+    load(id) {
+      if (id === "\0pdfium-wasm-url") {
+        const wasmPath = resolve(
+          "node_modules/@hyzyla/pdfium/dist/pdfium.wasm",
+        );
+        const wasmBuffer = readFileSync(wasmPath);
+        const base64 = wasmBuffer.toString("base64");
+        return `export default "data:application/wasm;base64,${base64}";`;
+      }
+    },
+  };
+}
 
 export default defineConfig({
-	plugins: [wasm(), topLevelAwait()],
-	worker: {
-		format: "es",
-		plugins: () => [wasm(), topLevelAwait()],
-	},
-	optimizeDeps: {
-		exclude: ["@hyzyla/pdfium"],
-	},
-	build: {
-		target: "esnext",
-	},
-	assetsInclude: ["**/*.wasm", "**/*.pdf"],
-	server: {
-		fs: {
-			// Allow serving files from one level up to the project root
-			allow: [".."],
-		},
-		// Configure proper MIME types
-		headers: {
-			"*.pdf": {
-				"Content-Type": "application/pdf",
-			},
-		},
-	},
+  plugins: [
+    pdfiumWasmInlinePlugin(),
+    wasm(),
+    topLevelAwait(),
+    dts({
+      include: ["src"],
+      outDir: "lib",
+      rollupTypes: false,
+      tsconfigPath: "./tsconfig.json",
+    }),
+  ],
+  worker: {
+    format: "es",
+    plugins: () => [wasm(), topLevelAwait()],
+  },
+  optimizeDeps: {
+    exclude: ["@hyzyla/pdfium"],
+  },
+  build: {
+    target: "esnext",
+    outDir: "lib",
+    copyPublicDir: false,
+    lib: {
+      entry: resolve(__dirname, "src/index.ts"),
+      formats: ["es"],
+      fileName: "index",
+    },
+    rollupOptions: {
+      external(id) {
+        // Let Vite resolve worker/url/inline imports
+        if (
+          id.includes("?worker") ||
+          id.includes("?inline") ||
+          id.includes("?url")
+        ) {
+          return false;
+        }
+        if (id === "lit" || id.startsWith("lit/")) return true;
+        if (id === "epubjs") return true;
+        if (id === "jszip") return true;
+        if (id === "@hyzyla/pdfium" || id.startsWith("@hyzyla/pdfium/"))
+          return true;
+        return false;
+      },
+      output: {
+        // Preserve the module structure so consumers can tree-shake unused viewers
+        preserveModules: true,
+        preserveModulesRoot: "src",
+        entryFileNames: "[name].js",
+      },
+    },
+  },
+  assetsInclude: ["**/*.wasm", "**/*.pdf"],
+  server: {
+    fs: {
+      allow: [".."],
+    },
+    headers: {
+      "*.pdf": {
+        "Content-Type": "application/pdf",
+      },
+    },
+  },
 });

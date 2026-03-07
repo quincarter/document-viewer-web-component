@@ -360,7 +360,7 @@ export class CbzViewer extends LitElement {
     }
   }
 
-  protected render() {
+  render() {
     return html`
       <canvas
         class="cbz-canvas"
