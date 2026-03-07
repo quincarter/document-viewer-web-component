@@ -1,23 +1,23 @@
 import type { EpubFlowType } from "./utils/epub-utils";
 
 export interface PageChangedEvent extends CustomEvent {
-  detail: {
-    currentPage: number;
-    totalPages: number;
-  };
+	detail: {
+		currentPage: number;
+		totalPages: number;
+	};
 }
 
 export interface FlowTypeChangedEvent extends CustomEvent {
-  detail: {
-    flowType: EpubFlowType;
-  };
+	detail: {
+		flowType: EpubFlowType;
+	};
 }
 
 export interface ViewModeChangedEvent
-  extends CustomEvent<{
-    isDualPage: boolean;
-  }> {
-  detail: {
-    isDualPage: boolean;
-  };
+	extends CustomEvent<{
+		isDualPage: boolean;
+	}> {
+	detail: {
+		isDualPage: boolean;
+	};
 }

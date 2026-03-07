@@ -1,4 +1,4 @@
-import { LitElement, html } from "lit";
+import { html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 // Import viewers
@@ -22,7 +22,7 @@ export class DocumentRouter extends LitElement {
   @state()
   private error: string | null = null;
 
-  protected async updated(changedProperties: Map<string, any>) {
+  protected async updated(changedProperties: Map<string, unknown>) {
     if (changedProperties.has("src") && this.src) {
       await this.determineFileType();
     }

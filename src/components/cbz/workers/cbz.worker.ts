@@ -1,16 +1,16 @@
 // src/workers/cbz.worker.ts
 
-import JSZip from "jszip";
 import type { JSZipObject } from "jszip";
+import JSZip from "jszip";
 
 let currentZip: JSZip | null = null;
 let sortedImageFiles: JSZipObject[] = [];
 let currentDocumentId: string | null = null;
-let pendingOperations: Set<string> = new Set();
+const pendingOperations: Set<string> = new Set();
 let isLoadingDocument: boolean = false;
 
 // Add logging function to track state changes
-function logStateChange(action: string, details: Record<string, any> = {}) {
+function logStateChange(action: string, details: Record<string, unknown> = {}) {
   console.debug(`CBZ Worker - ${action}:`, {
     documentId: currentDocumentId,
     pendingOps: pendingOperations.size,
@@ -34,14 +34,17 @@ function naturalSort(a: string, b: string): number {
     const aPart = aParts[i];
     const bPart = bParts[i];
 
-    if (isNaN(parseInt(aPart)) || isNaN(parseInt(bPart))) {
+    if (
+      Number.isNaN(parseInt(aPart, 10)) ||
+      Number.isNaN(parseInt(bPart, 10))
+    ) {
       // String comparison
       if (aPart < bPart) return -1;
       if (aPart > bPart) return 1;
     } else {
       // Number comparison
-      const aNum = parseInt(aPart);
-      const bNum = parseInt(bPart);
+      const aNum = parseInt(aPart, 10);
+      const bNum = parseInt(bPart, 10);
       if (aNum < bNum) return -1;
       if (aNum > bNum) return 1;
     }
@@ -49,6 +52,7 @@ function naturalSort(a: string, b: string): number {
   return aParts.length - bParts.length;
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: Worker message events have dynamic payloads
 self.onmessage = async (event: MessageEvent<any>) => {
   const { type, payload, messageId } = event.data;
 
@@ -63,7 +67,7 @@ self.onmessage = async (event: MessageEvent<any>) => {
         });
         break;
 
-      case "loadCbz":
+      case "loadCbz": {
         isLoadingDocument = true;
         logStateChange("Starting document load", {
           newDocId: payload.documentId,
@@ -108,7 +112,7 @@ self.onmessage = async (event: MessageEvent<any>) => {
 
         // Sort the image files alphanumerically/naturally by name
         sortedImageFiles = filesInZip.sort((a, b) =>
-          naturalSort(a.name, b.name)
+          naturalSort(a.name, b.name),
         );
 
         if (sortedImageFiles.length === 0) {
@@ -128,8 +132,9 @@ self.onmessage = async (event: MessageEvent<any>) => {
           messageId,
         });
         break;
+      }
 
-      case "renderCbzPage":
+      case "renderCbzPage": {
         // Check if we're in the middle of loading a document
         if (isLoadingDocument) {
           logStateChange("Ignoring render during load", {
@@ -163,7 +168,7 @@ self.onmessage = async (event: MessageEvent<any>) => {
 
         if (pageNumber < 0 || pageNumber >= sortedImageFiles.length) {
           throw new Error(
-            `Invalid page number: ${pageNumber}. CBZ has ${sortedImageFiles.length} pages.`
+            `Invalid page number: ${pageNumber}. CBZ has ${sortedImageFiles.length} pages.`,
           );
         }
 
@@ -193,7 +198,7 @@ self.onmessage = async (event: MessageEvent<any>) => {
             success: true,
             messageId,
           },
-          { transfer: [imageBuffer] } // Transfer the ArrayBuffer for better performance
+          { transfer: [imageBuffer] }, // Transfer the ArrayBuffer for better performance
         );
 
         // Remove the operation from pending set when complete
@@ -204,6 +209,7 @@ self.onmessage = async (event: MessageEvent<any>) => {
         });
 
         break;
+      }
 
       case "closeCbz": // Optional: if you want to explicitly clear resources
         pendingOperations.clear();

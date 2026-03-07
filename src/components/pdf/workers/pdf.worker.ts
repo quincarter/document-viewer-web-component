@@ -1,7 +1,6 @@
 // src/workers/pdf.worker.ts
 
-import { PDFiumDocument, PDFiumLibrary } from "@hyzyla/pdfium";
-
+import { type PDFiumDocument, PDFiumLibrary, PDFiumPage } from "@hyzyla/pdfium";
 let pdfLibrary: PDFiumLibrary | null = null;
 let currentDocument: PDFiumDocument | null = null;
 let currentDocumentId: string | null = null;
@@ -9,6 +8,7 @@ let currentDocumentId: string | null = null;
 /**
  * Handles incoming messages from the main thread.
  */
+// biome-ignore lint/suspicious/noExplicitAny: Worker message events have dynamic payloads
 self.onmessage = async (event: MessageEvent<any>) => {
   const { type, payload, messageId } = event.data;
 
@@ -37,10 +37,10 @@ self.onmessage = async (event: MessageEvent<any>) => {
         });
         break;
 
-      case "loadPdf":
+      case "loadPdf": {
         if (!pdfLibrary) {
           throw new Error(
-            'PDF library not initialized. Send "init" message first.'
+            'PDF library not initialized. Send "init" message first.',
           );
         }
         if (!payload || !payload.pdfBuffer) {
@@ -55,7 +55,7 @@ self.onmessage = async (event: MessageEvent<any>) => {
           pdfBuffer = payload.pdfBuffer.buffer;
         } else {
           throw new Error(
-            "Invalid PDF buffer type. Expected ArrayBuffer or Uint8Array."
+            "Invalid PDF buffer type. Expected ArrayBuffer or Uint8Array.",
           );
         }
 
@@ -96,8 +96,9 @@ self.onmessage = async (event: MessageEvent<any>) => {
           throw error;
         }
         break;
+      }
 
-      case "renderPage":
+      case "renderPage": {
         if (!pdfLibrary || !currentDocument) {
           throw new Error("No PDF document loaded or library not initialized.");
         }
@@ -107,18 +108,20 @@ self.onmessage = async (event: MessageEvent<any>) => {
         // Validate page number
         if (pageNumber < 0 || pageNumber >= currentDocument.getPageCount()) {
           throw new Error(
-            `Invalid page number: ${pageNumber}. Document has ${currentDocument.getPageCount()} pages.`
+            `Invalid page number: ${pageNumber}. Document has ${currentDocument.getPageCount()} pages.`,
           );
         }
 
         try {
           // Get the page
-          const page = currentDocument.getPage(pageNumber);
-
+          const page: PDFiumPage = currentDocument.getPage(pageNumber);
           // Get page size and calculate scaled dimensions
-          const size = page.getSize();
-          const width = Math.floor(size.width * scale);
-          const height = Math.floor(size.height * scale);
+          const width = Math.floor(
+            page.getOriginalSize().originalWidth * scale,
+          );
+          const height = Math.floor(
+            page.getOriginalSize().originalHeight * scale,
+          );
 
           // Render the page with PDFium
           const renderResult = await page.render({
@@ -153,6 +156,7 @@ self.onmessage = async (event: MessageEvent<any>) => {
           });
         }
         break;
+      }
 
       default:
         throw new Error(`Unknown message type: ${type}`);

@@ -1,11 +1,11 @@
-import { LitElement, html } from "lit";
+import { html, LitElement } from "lit";
 import { property, query, state } from "lit/decorators.js";
 import "./epub-controls";
 import { EpubViewerStyles } from "./epub-viewer.styles";
 import type {
-    EpubFlowType,
-    EpubViewerSettings,
-    NavItem,
+  EpubFlowType,
+  EpubViewerSettings,
+  NavItem,
 } from "./utils/epub-utils";
 import { EpubManager, loadSettings, saveSettings } from "./utils/epub-utils";
 
@@ -67,7 +67,7 @@ export class EpubViewer extends LitElement {
     `;
   }
 
-  updated(changedProperties: Map<string, any>) {
+  updated(changedProperties: Map<string, unknown>) {
     if (changedProperties.has("src") && this.src) {
       this.loadEpubDocument();
     }
@@ -112,7 +112,7 @@ export class EpubViewer extends LitElement {
     ) {
       // Get visible section
       const sections = Array.from(
-        this.bookContainer.querySelectorAll("[ref]")
+        this.bookContainer.querySelectorAll("[ref]"),
       ) as HTMLElement[];
       const containerRect = this.bookContainer.getBoundingClientRect();
 
@@ -169,12 +169,12 @@ export class EpubViewer extends LitElement {
     if (flowType === "scrolled-continuous") {
       this.bookContainer.addEventListener(
         "scroll",
-        this._handleScroll.bind(this)
+        this._handleScroll.bind(this),
       );
     } else {
       this.bookContainer.removeEventListener(
         "scroll",
-        this._handleScroll.bind(this)
+        this._handleScroll.bind(this),
       );
     }
   }
@@ -204,7 +204,7 @@ export class EpubViewer extends LitElement {
         },
         bubbles: true,
         composed: true,
-      })
+      }),
     );
   }
 
@@ -241,14 +241,14 @@ export class EpubViewer extends LitElement {
       this.dispatchEvent(
         new CustomEvent("epub-loaded", {
           detail: { totalPages: this.totalPages },
-        })
+        }),
       );
     } catch (err) {
       this.error = err instanceof Error ? err.message : String(err);
       this.dispatchEvent(
         new CustomEvent("epub-error", {
           detail: { error: this.error },
-        })
+        }),
       );
     } finally {
       this.isLoading = false;

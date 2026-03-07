@@ -1,4 +1,4 @@
-import ePub, { Book, Rendition } from "epubjs";
+import ePub, { type Book, type Rendition } from "epubjs";
 
 export type EpubFlowType =
   | "paginated" // Traditional paginated view
@@ -107,7 +107,7 @@ export class EpubManager {
       throw new Error(
         `Failed to load book: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
     }
   }
@@ -165,7 +165,7 @@ export class EpubManager {
    */
   async createRendition(
     element: HTMLElement,
-    options: RenditionOptions
+    options: RenditionOptions,
   ): Promise<void> {
     if (!this.book) {
       throw new Error("No book loaded");
@@ -238,7 +238,7 @@ export class EpubManager {
   async setFlowType(
     flowType: EpubFlowType,
     element: HTMLElement,
-    options: RenditionOptions
+    options: RenditionOptions,
   ): Promise<void> {
     if (flowType !== this.currentFlow) {
       const currentLocation = this.rendition?.location;
@@ -254,8 +254,10 @@ export class EpubManager {
       throw new Error("No book loaded or spine not available");
     }
 
+    // biome-ignore lint/suspicious/noExplicitAny: epubjs spine items lack proper typings
     let spineItem: any = null;
     let currentIndex = 0;
+    // biome-ignore lint/suspicious/noExplicitAny: epubjs spine items lack proper typings
     this.book.spine.each((item: any) => {
       if (currentIndex === pageNumber - 1) {
         spineItem = item;
@@ -310,6 +312,7 @@ export class EpubManager {
     }
 
     let index = -1;
+    // biome-ignore lint/suspicious/noExplicitAny: epubjs spine items lack proper typings
     this.book.spine.each((item: any, i: number) => {
       if (item.href === href) {
         index = i;
@@ -363,7 +366,6 @@ export class EpubManager {
       case "sepia":
         this.rendition.themes.select("sepia");
         break;
-      case "light":
       default:
         this.rendition.themes.select("light");
         break;

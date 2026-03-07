@@ -1,17 +1,16 @@
 // src/document-viewer.ts
-import { LitElement, html, type PropertyValueMap } from "lit";
-import { property, query, state } from "lit/decorators.js";
-
-// Import worker instances (Vite inline worker syntax)
-import PdfWorker from "./workers/pdf.worker?worker&inline";
 
 // Import WASM URLs (Vite syntax)
 import pdfiumWasmUrl from "@hyzyla/pdfium/pdfium.wasm?url";
+import { html, LitElement, type PropertyValueMap } from "lit";
+import { property, query, state } from "lit/decorators.js";
 import { PdfViewerStyles } from "./pdf-viewer.styles";
+// Import worker instances (Vite inline worker syntax)
+import PdfWorker from "./workers/pdf.worker?worker&inline";
 
 interface DocumentWorker extends Worker {
-  postMessage(message: any, transfer: Transferable[]): void;
-  postMessage(message: any, options?: StructuredSerializeOptions): void;
+  postMessage(message: unknown, transfer: Transferable[]): void;
+  postMessage(message: unknown, options?: StructuredSerializeOptions): void;
 }
 
 export class PdfViewer extends LitElement {
@@ -42,7 +41,7 @@ export class PdfViewer extends LitElement {
 
   private _pdfWorker!: DocumentWorker | null;
   private _workerMessageIdCounter = 0;
-  private _pendingWorkerMessages = new Map<number, (value: any) => void>();
+  private _pendingWorkerMessages = new Map<number, (value: unknown) => void>();
   private _pendingFileLoad: { source: string | File } | null = null;
 
   static styles = [PdfViewerStyles];
@@ -74,14 +73,15 @@ export class PdfViewer extends LitElement {
     super.disconnectedCallback();
     this._pdfWorker?.terminate();
     this._pdfWorker = null;
-    this._pendingWorkerMessages.forEach((resolve) =>
-      resolve({ type: "error", message: "Worker terminated" })
-    );
+    for (const resolve of this._pendingWorkerMessages.values()) {
+      resolve({ type: "error", message: "Worker terminated" });
+    }
     this._pendingWorkerMessages.clear();
   }
 
   protected firstUpdated(
-    _changedProperties: PropertyValueMap<any> | Map<PropertyKey, unknown>
+    // biome-ignore lint/suspicious/noExplicitAny: Lit PropertyValueMap requires any for type guard
+    _changedProperties: PropertyValueMap<any> | Map<PropertyKey, unknown>,
   ): void {
     if (this._canvas) {
       this._canvasContext = this._canvas.getContext("2d");
@@ -96,7 +96,8 @@ export class PdfViewer extends LitElement {
   }
 
   protected updated(
-    changedProperties: PropertyValueMap<any> | Map<PropertyKey, unknown>
+    // biome-ignore lint/suspicious/noExplicitAny: Lit PropertyValueMap requires any for type guard
+    changedProperties: PropertyValueMap<any> | Map<PropertyKey, unknown>,
   ): void {
     if (changedProperties.has("src") && this.src) {
       this._resetViewerState();
@@ -115,7 +116,7 @@ export class PdfViewer extends LitElement {
         0,
         0,
         this._canvas.width,
-        this._canvas.height
+        this._canvas.height,
       );
       this._canvas.width = 300;
       this._canvas.height = 150;
@@ -199,7 +200,7 @@ export class PdfViewer extends LitElement {
   private _drawPageToCanvas(
     pixelDataBuffer: ArrayBuffer,
     width: number,
-    height: number
+    height: number,
   ) {
     if (!this._canvas || !this._canvasContext) {
       this._handleError("Canvas not initialized");
@@ -210,7 +211,7 @@ export class PdfViewer extends LitElement {
       const imageData = new ImageData(
         new Uint8ClampedArray(pixelDataBuffer),
         width,
-        height
+        height,
       );
 
       this._canvas.width = width;
@@ -219,16 +220,18 @@ export class PdfViewer extends LitElement {
       this._canvasContext.putImageData(imageData, 0, 0);
     } catch (error) {
       this._handleError(
-        `Failed to draw to canvas: ${(error as Error).message}`
+        `Failed to draw to canvas: ${(error as Error).message}`,
       );
     }
   }
 
+  // biome-ignore lint/suspicious/noExplicitAny: Worker message data has dynamic shape
   private _handleWorkerMessage(data: any, workerName: string) {
     const { type, success, messageId } = data;
 
     if (messageId != null && this._pendingWorkerMessages.has(messageId)) {
-      const resolve = this._pendingWorkerMessages.get(messageId)!;
+      const resolve = this._pendingWorkerMessages.get(messageId);
+      if (!resolve) return;
       this._pendingWorkerMessages.delete(messageId);
       resolve(data);
     }
@@ -280,16 +283,16 @@ export class PdfViewer extends LitElement {
   private _handleWorkerError(error: Event | ErrorEvent, workerName: string) {
     console.error(`Error in ${workerName} worker:`, error);
     this._handleError(
-      error instanceof ErrorEvent ? error.message : "Worker error occurred"
+      error instanceof ErrorEvent ? error.message : "Worker error occurred",
     );
   }
 
   private _sendMessageToWorker(
     worker: DocumentWorker,
     type: string,
-    payload: any,
-    transferList?: Transferable[]
-  ): Promise<any> {
+    payload: unknown,
+    transferList?: Transferable[],
+  ): Promise<unknown> {
     return new Promise((resolve) => {
       const messageId = this._workerMessageIdCounter++;
       this._pendingWorkerMessages.set(messageId, resolve);
@@ -324,7 +327,7 @@ export class PdfViewer extends LitElement {
   private _handlePageInputChange(e: Event) {
     const input = e.target as HTMLInputElement;
     const page = parseInt(input.value, 10);
-    if (!isNaN(page) && page >= 1 && page <= this._totalPages) {
+    if (!Number.isNaN(page) && page >= 1 && page <= this._totalPages) {
       this._currentPageNumber = page;
       this._renderCurrentPage();
     } else {

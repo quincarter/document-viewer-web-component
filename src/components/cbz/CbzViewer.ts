@@ -1,4 +1,4 @@
-import { LitElement, html, nothing } from "lit";
+import { html, LitElement, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import { CbzViewerStyles } from "./cbz-viewer.styles";
 // Using CustomEvent for view mode changes
@@ -71,7 +71,7 @@ export class CbzViewer extends LitElement {
             documentId: `cbz-doc-${Date.now()}`,
           },
         },
-        [archiveBuffer]
+        [archiveBuffer],
       );
     } catch (error) {
       console.error("Error loading CBZ:", error);
@@ -237,7 +237,7 @@ export class CbzViewer extends LitElement {
       // Single page mode - center in full canvas
       const scale = Math.min(
         canvasWidth / img.naturalWidth,
-        canvasHeight / img.naturalHeight
+        canvasHeight / img.naturalHeight,
       );
       const dWidth = img.naturalWidth * scale;
       const dHeight = img.naturalHeight * scale;
@@ -250,7 +250,7 @@ export class CbzViewer extends LitElement {
       const halfWidth = canvasWidth / 2;
       const scale = Math.min(
         halfWidth / img.naturalWidth,
-        canvasHeight / img.naturalHeight
+        canvasHeight / img.naturalHeight,
       );
       const dWidth = img.naturalWidth * scale;
       const dHeight = img.naturalHeight * scale;
@@ -354,7 +354,7 @@ export class CbzViewer extends LitElement {
     }
   }
 
-  protected updated(changedProperties: Map<string, any>) {
+  protected updated(changedProperties: Map<string, unknown>) {
     if (changedProperties.has("src") && this.src) {
       this._loadDocument();
     }
