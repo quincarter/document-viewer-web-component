@@ -34,68 +34,81 @@ function pdfiumWasmInlinePlugin(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [
-    pdfiumWasmInlinePlugin(),
-    wasm(),
-    topLevelAwait(),
-    dts({
-      include: ["src"],
-      outDir: "lib",
-      rollupTypes: false,
-      tsconfigPath: "./tsconfig.json",
-    }),
-  ],
-  worker: {
-    format: "es",
-    plugins: () => [wasm(), topLevelAwait()],
-  },
-  optimizeDeps: {
-    exclude: ["@hyzyla/pdfium"],
-  },
-  build: {
-    target: "esnext",
-    outDir: "lib",
-    copyPublicDir: false,
-    lib: {
-      entry: resolve(__dirname, "src/index.ts"),
-      formats: ["es"],
-      fileName: "index",
+export default defineConfig(({ mode }) => {
+  const isDemo = mode === "demo";
+
+  return {
+    base: isDemo ? "/document-viewer-web-component/" : "/",
+    plugins: [
+      pdfiumWasmInlinePlugin(),
+      wasm(),
+      topLevelAwait(),
+      ...(!isDemo
+        ? [
+            dts({
+              include: ["src"],
+              outDir: "lib",
+              rollupTypes: false,
+              tsconfigPath: "./tsconfig.json",
+            }),
+          ]
+        : []),
+    ],
+    worker: {
+      format: "es" as const,
+      plugins: () => [wasm(), topLevelAwait()],
     },
-    rollupOptions: {
-      external(id) {
-        // Let Vite resolve worker/url/inline imports
-        if (
-          id.includes("?worker") ||
-          id.includes("?inline") ||
-          id.includes("?url")
-        ) {
-          return false;
+    optimizeDeps: {
+      exclude: ["@hyzyla/pdfium"],
+    },
+    build: isDemo
+      ? {
+          target: "esnext",
+          outDir: "dist",
         }
-        if (id === "lit" || id.startsWith("lit/")) return true;
-        if (id === "epubjs") return true;
-        if (id === "jszip") return true;
-        if (id === "@hyzyla/pdfium" || id.startsWith("@hyzyla/pdfium/"))
-          return true;
-        return false;
+      : {
+          target: "esnext",
+          outDir: "lib",
+          copyPublicDir: false,
+          lib: {
+            entry: resolve(__dirname, "src/index.ts"),
+            formats: ["es"],
+            fileName: "index",
+          },
+          rollupOptions: {
+            external(id) {
+              // Let Vite resolve worker/url/inline imports
+              if (
+                id.includes("?worker") ||
+                id.includes("?inline") ||
+                id.includes("?url")
+              ) {
+                return false;
+              }
+              if (id === "lit" || id.startsWith("lit/")) return true;
+              if (id === "epubjs") return true;
+              if (id === "jszip") return true;
+              if (id === "@hyzyla/pdfium" || id.startsWith("@hyzyla/pdfium/"))
+                return true;
+              return false;
+            },
+            output: {
+              preserveModules: true,
+              preserveModulesRoot: "src",
+              entryFileNames: "[name].js",
+            },
+          },
+        },
+    assetsInclude: ["**/*.wasm", "**/*.pdf"],
+    server: {
+      fs: {
+        allow: [".."],
       },
-      output: {
-        // Preserve the module structure so consumers can tree-shake unused viewers
-        preserveModules: true,
-        preserveModulesRoot: "src",
-        entryFileNames: "[name].js",
+      headers: {
+        "*.pdf": {
+          "Content-Type": "application/pdf",
+        },
       },
     },
-  },
-  assetsInclude: ["**/*.wasm", "**/*.pdf"],
-  server: {
-    fs: {
-      allow: [".."],
-    },
-    headers: {
-      "*.pdf": {
-        "Content-Type": "application/pdf",
-      },
-    },
-  },
+  };
 });

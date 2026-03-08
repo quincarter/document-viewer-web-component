@@ -1,9 +1,10 @@
 import { html, LitElement } from "lit";
 import { property } from "lit/decorators.js";
 import { CbzControlsStyles } from "./cbz-controls.styles";
+import { ViewerControlsSharedStyles } from "../common/viewer-controls.styles";
 
 export class CbzControls extends LitElement {
-  static styles = [CbzControlsStyles];
+  static styles = [ViewerControlsSharedStyles, CbzControlsStyles];
 
   @property({ type: Number })
   currentPage: number = 1;
@@ -28,7 +29,9 @@ export class CbzControls extends LitElement {
   protected render() {
     return html`
       <div class="page-info">Page ${this.currentPage} / ${this.totalPages}</div>
+      <div class="ctrl-divider"></div>
       <button
+        class="ctrl-btn ${this.isDualPage ? "active" : ""}"
         @click=${this._handleDualPageToggle}
         title=${this.isDualPage ? "Single Page View" : "Dual Page View"}
       >
@@ -47,7 +50,7 @@ export class CbzControls extends LitElement {
               />
               <path d="M12 5v14" />
             </svg>`}
-        ${this.isDualPage ? "Single Page" : "Dual Page"}
+        ${this.isDualPage ? "Single" : "Dual"}
       </button>
     `;
   }

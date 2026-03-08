@@ -35,7 +35,7 @@ describe("cbz-controls", () => {
 
     const button = el.shadowRoot!.querySelector("button");
     expect(button).to.exist;
-    expect(button!.textContent).to.include("Dual Page");
+    expect(button!.textContent).to.include("Dual");
   });
 
   it("shows Single Page text when in dual page mode", async () => {
@@ -44,7 +44,7 @@ describe("cbz-controls", () => {
     );
 
     const button = el.shadowRoot!.querySelector("button");
-    expect(button!.textContent).to.include("Single Page");
+    expect(button!.textContent).to.include("Single");
   });
 
   it("dispatches view-mode-changed event on toggle", async () => {

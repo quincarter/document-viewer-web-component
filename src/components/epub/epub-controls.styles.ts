@@ -54,15 +54,16 @@ export const EpubConrolsStyles = css`
   }
 
   .nav-arrow {
-    background: rgba(0, 0, 0, 0.3);
-    color: white;
+    background: var(--viewer-ctrl-bg, rgba(0, 0, 0, 0.75));
+    color: var(--viewer-ctrl-color, white);
     border-radius: 50%;
     width: 40px;
     height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(4px);
+    backdrop-filter: var(--viewer-ctrl-blur, blur(8px));
+    -webkit-backdrop-filter: var(--viewer-ctrl-blur, blur(8px));
     transition: transform 0.2s ease, background-color 0.2s ease;
   }
 
@@ -109,49 +110,56 @@ export const EpubConrolsStyles = css`
     top: 0;
     left: 0;
     right: 0;
-    padding: 20px;
+    padding: 16px 20px;
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), transparent);
+    gap: var(--viewer-ctrl-gap, 8px);
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.35), transparent);
     transition: opacity 0.3s ease;
     pointer-events: auto;
   }
 
+  /* Use shared .ctrl-btn, .ctrl-bar tokens — override only what differs */
   button {
-    padding: 8px 16px;
+    padding: var(--viewer-ctrl-padding, 6px 12px);
     border: none;
-    background: rgba(68, 68, 68, 0.8);
-    color: white;
-    border-radius: 4px;
+    background: var(--viewer-ctrl-bg, rgba(0, 0, 0, 0.75));
+    color: var(--viewer-ctrl-color, white);
+    border-radius: var(--viewer-ctrl-radius, 6px);
     cursor: pointer;
-    backdrop-filter: blur(4px);
-    transition: all 0.2s ease;
-    display: flex;
+    backdrop-filter: var(--viewer-ctrl-blur, blur(8px));
+    -webkit-backdrop-filter: var(--viewer-ctrl-blur, blur(8px));
+    transition: background 0.15s ease, transform 0.1s ease;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    font: inherit;
+    font-size: var(--viewer-ctrl-font-size, 0.85rem);
+    line-height: 1;
   }
 
-  button:hover {
-    background: rgba(102, 102, 102, 0.9);
-    transform: translateY(-1px);
+  button:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.85);
+    filter: brightness(1.2);
   }
 
   button:disabled {
-    background: rgba(204, 204, 204, 0.5);
+    opacity: 0.35;
     cursor: not-allowed;
   }
 
   button.active {
-    background: rgba(0, 120, 215, 0.8);
+    background: var(--viewer-ctrl-active-bg, rgba(0, 120, 215, 0.85));
   }
 
-  button.active:hover {
-    background: rgba(0, 120, 215, 0.9);
+  button.active:hover:not(:disabled) {
+    background: var(--viewer-ctrl-active-bg, rgba(0, 120, 215, 0.85));
+    filter: brightness(1.15);
   }
 
+  /* Icon-only round button (text settings) */
   button.text-settings {
-    padding: 8px;
+    padding: var(--viewer-ctrl-icon-padding, 6px);
     border-radius: 50%;
     aspect-ratio: 1;
     display: grid;
@@ -159,7 +167,8 @@ export const EpubConrolsStyles = css`
   }
 
   button.text-settings svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
   }
 `;
+

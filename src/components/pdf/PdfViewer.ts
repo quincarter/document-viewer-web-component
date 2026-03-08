@@ -1,9 +1,10 @@
-// src/document-viewer.ts
+// src/components/pdf/PdfViewer.ts
 
 // Import WASM URLs (Vite syntax)
 import { html, LitElement, type PropertyValueMap } from "lit";
 import { property, query, state } from "lit/decorators.js";
 import { PdfViewerStyles } from "./pdf-viewer.styles";
+import { ViewerControlsSharedStyles } from "../common/viewer-controls.styles";
 import pdfiumWasmUrl from "@hyzyla/pdfium/pdfium.wasm?url";
 // Import worker instances (Vite inline worker syntax)
 import PdfWorker from "./workers/pdf.worker?worker&inline";
@@ -29,22 +30,29 @@ export class PdfViewer extends LitElement {
   @state()
   private _totalPages: number = 0;
   @state()
-  private _currentScale: number = 1.5;
+  private _currentScale: number = 1.0; // overridden by fit-to-view on first render
+  @state()
+  private _isFitToView: boolean = true;
   @state()
   private _currentDocumentId: string | null = null; // To correlate worker responses
   @state()
   private _isInitialized: boolean = false;
+  /** Native page dimensions from the last rendered page (device pixels before scale) */
+  private _nativePageWidth: number = 0;
 
   @query("#viewerCanvas")
   private _canvas!: HTMLCanvasElement;
+  @query(".content-area")
+  private _contentArea!: HTMLElement;
   private _canvasContext!: CanvasRenderingContext2D | null;
+  private _resizeObserver: ResizeObserver | null = null;
 
   private _pdfWorker!: DocumentWorker | null;
   private _workerMessageIdCounter = 0;
   private _pendingWorkerMessages = new Map<number, (value: unknown) => void>();
   private _pendingFileLoad: { source: string | File } | null = null;
 
-  static styles = [PdfViewerStyles];
+  static styles = [ViewerControlsSharedStyles, PdfViewerStyles];
 
   constructor() {
     super();
@@ -71,6 +79,8 @@ export class PdfViewer extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = null;
     this._pdfWorker?.terminate();
     this._pdfWorker = null;
     for (const resolve of this._pendingWorkerMessages.values()) {
@@ -88,6 +98,16 @@ export class PdfViewer extends LitElement {
     } else {
       console.error("PDF Viewer: Canvas element not found.");
       this._errorMessage = "Canvas element could not be initialized.";
+    }
+
+    // Watch for container size changes to re-apply fit-to-view
+    if (this._contentArea) {
+      this._resizeObserver = new ResizeObserver(() => {
+        if (this._isFitToView && this._nativePageWidth > 0) {
+          this._applyFitToView();
+        }
+      });
+      this._resizeObserver.observe(this._contentArea);
     }
 
     if (this.src) {
@@ -264,8 +284,17 @@ export class PdfViewer extends LitElement {
 
       case "pageRendered":
         if (success && data.imageData) {
+          // Store native width (pixel width at the rendered scale) to enable fit-to-view
+          if (this._currentScale !== 0) {
+            this._nativePageWidth = Math.round(data.width / this._currentScale);
+          }
           this._drawPageToCanvas(data.imageData, data.width, data.height);
           this._isLoading = false;
+
+          // On first render after load, apply fit-to-view if enabled
+          if (this._isFitToView) {
+            this._applyFitToView();
+          }
         } else {
           this._handleError("Failed to render page");
         }
@@ -335,64 +364,45 @@ export class PdfViewer extends LitElement {
     }
   }
 
-  private _handleZoomChange(e: Event) {
-    const select = e.target as HTMLSelectElement;
-    this._currentScale = parseFloat(select.value);
+  private _handleZoomSliderChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    this._currentScale = parseFloat(input.value);
+    this._isFitToView = false;
+    this._renderCurrentPage();
+  }
+
+  private _handleFitToView() {
+    this._isFitToView = true;
+    if (this._nativePageWidth > 0) {
+      this._applyFitToView();
+    }
+  }
+
+  /**
+   * Computes and applies a scale so the page fills the content area width.
+   * Uses the native page pixel width (at scale=1) for the calculation.
+   */
+  private _applyFitToView() {
+    if (!this._contentArea || this._nativePageWidth <= 0) return;
+    const containerWidth = this._contentArea.clientWidth - 32; // 1rem padding each side
+    const newScale = Math.max(0.5, Math.min(3, containerWidth / this._nativePageWidth));
+    this._currentScale = Math.round(newScale * 100) / 100;
     this._renderCurrentPage();
   }
 
   render() {
+    const zoomPercent = Math.round(this._currentScale * 100);
+    const canNav = this._totalPages > 0 && !this._isLoading;
+
     return html`
       <div class="viewer-container">
-        <header>
-          <h3>${this.viewerTitle}</h3>
-          <div class="controls">
-            <button
-              @click=${this._goToPreviousPage}
-              ?disabled=${this._currentPageNumber <= 1 || this._isLoading}
-            >
-              &larr; Prev
-            </button>
-            <span>
-              Page
-              <input
-                type="number"
-                .value=${this._currentPageNumber.toString()}
-                min="1"
-                .max=${this._totalPages.toString()}
-                @change=${this._handlePageInputChange}
-                ?disabled=${this._totalPages === 0 || this._isLoading}
-              />
-              of ${this._totalPages || "?"}
-            </span>
-            <button
-              @click=${this._goToNextPage}
-              ?disabled=${this._currentPageNumber >= this._totalPages ||
-              this._isLoading}
-            >
-              Next &rarr;
-            </button>
-            <select
-              @change=${this._handleZoomChange}
-              .value=${this._currentScale.toString()}
-              ?disabled=${this._isLoading}
-            >
-              <option value="0.5">50%</option>
-              <option value="1">100%</option>
-              <option value="1.5">150%</option>
-              <option value="2">200%</option>
-              <option value="2.5">250%</option>
-              <option value="3">300%</option>
-            </select>
-          </div>
-        </header>
         <main class="content-area">
           <canvas id="viewerCanvas"></canvas>
           ${this._isLoading
             ? html`<div class="status-overlay">
                 <div class="message">
                   <div class="loader"></div>
-                  <p>Loading...</p>
+                  <p>Loading…</p>
                 </div>
               </div>`
             : ""}
@@ -401,6 +411,7 @@ export class PdfViewer extends LitElement {
                 <div class="message error-message">
                   <p>Error: ${this._errorMessage}</p>
                   <button
+                    class="ctrl-btn"
                     @click=${() => {
                       this._errorMessage = null;
                       this._resetViewerState();
@@ -412,6 +423,81 @@ export class PdfViewer extends LitElement {
               </div>`
             : ""}
         </main>
+
+        <!-- Floating bottom toolbar -->
+        <div class="toolbar-wrap">
+          <div class="ctrl-bar">
+            <!-- Prev page -->
+            <button
+              class="ctrl-btn icon-only"
+              title="Previous page"
+              @click=${this._goToPreviousPage}
+              ?disabled=${this._currentPageNumber <= 1 || !canNav}
+            >
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+              </svg>
+            </button>
+
+            <!-- Page input -->
+            <span class="ctrl-page-info">
+              <input
+                class="ctrl-page-input"
+                type="number"
+                .value=${this._currentPageNumber.toString()}
+                min="1"
+                .max=${this._totalPages.toString()}
+                @change=${this._handlePageInputChange}
+                ?disabled=${!canNav}
+                aria-label="Current page"
+              />
+              <span>/ ${this._totalPages || "—"}</span>
+            </span>
+
+            <!-- Next page -->
+            <button
+              class="ctrl-btn icon-only"
+              title="Next page"
+              @click=${this._goToNextPage}
+              ?disabled=${this._currentPageNumber >= this._totalPages || !canNav}
+            >
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+              </svg>
+            </button>
+
+            <div class="ctrl-divider"></div>
+
+            <!-- Fit to view -->
+            <button
+              class="ctrl-btn ${this._isFitToView ? "active" : ""}"
+              title="Fit to view"
+              @click=${this._handleFitToView}
+              ?disabled=${!canNav}
+            >
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 3h7v2H5v5H3V3zm11 0h7v7h-2V5h-5V3zM3 14h2v5h5v2H3v-7zm16 5h-5v2h7v-7h-2v5z"/>
+              </svg>
+              Fit
+            </button>
+
+            <!-- Zoom range slider -->
+            <div class="ctrl-zoom-wrap">
+              <input
+                class="ctrl-range"
+                type="range"
+                min="0.5"
+                max="3"
+                step="0.05"
+                .value=${this._currentScale.toString()}
+                @input=${this._handleZoomSliderChange}
+                ?disabled=${!canNav}
+                aria-label="Zoom level"
+              />
+              <span class="ctrl-zoom-label">${zoomPercent}%</span>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }

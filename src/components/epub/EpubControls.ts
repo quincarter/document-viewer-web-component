@@ -1,13 +1,14 @@
 import { html, LitElement } from "lit";
 import { property, state } from "lit/decorators.js";
 import { EpubConrolsStyles } from "./epub-controls.styles";
+import { ViewerControlsSharedStyles } from "../common/viewer-controls.styles";
 import type { EpubFlowType } from "./utils/epub-utils";
 import "../common/popover-menu";
 import "./epub-text-controls";
 import type { FlowTypeChangedEvent, PageChangedEvent } from "./interfaces";
 
 export class EpubControls extends LitElement {
-  static styles = [EpubConrolsStyles];
+  static styles = [ViewerControlsSharedStyles, EpubConrolsStyles];
 
   @property({ type: Number })
   totalPages: number = 0;

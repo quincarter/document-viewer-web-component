@@ -5,57 +5,20 @@ export const PdfViewerStyles = css`
     display: block;
     width: 100%;
     height: 100%;
-    font-family: sans-serif;
-    background-color: #f0f0f0;
+    font-family: system-ui, -apple-system, sans-serif;
+    background-color: #e8e8e8;
     position: relative;
   }
+
   .viewer-container {
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
-    background-color: #fff;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    position: relative;
   }
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 1rem;
-    background-color: #333;
-    color: white;
-    flex-shrink: 0;
-  }
-  header h3 {
-    margin: 0;
-    font-size: 1.2rem;
-  }
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .controls input[type="number"] {
-    width: 50px;
-    padding: 0.25rem;
-    text-align: center;
-  }
-  .controls button,
-  .controls select {
-    padding: 0.25rem 0.5rem;
-    background-color: #555;
-    color: white;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-  .controls button:disabled {
-    background-color: #777;
-    cursor: not-allowed;
-  }
-  .controls button:hover:not(:disabled) {
-    background-color: #666;
-  }
+
+  /* ── Content area ─────────────────────────────────────────────────────── */
   .content-area {
     flex-grow: 1;
     overflow: auto;
@@ -63,15 +26,31 @@ export const PdfViewerStyles = css`
     justify-content: center;
     align-items: flex-start;
     background-color: #e0e0e0;
-    padding: 1rem;
+    padding: 1rem 1rem 5rem; /* bottom padding keeps canvas clear of toolbar */
     position: relative;
   }
+
   canvas {
     display: block;
     margin: 0 auto;
-    box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
     background-color: white;
   }
+
+  /* ── Floating bottom toolbar ──────────────────────────────────────────── */
+  .toolbar-wrap {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    pointer-events: auto;
+  }
+
+  /* ── Status overlays ──────────────────────────────────────────────────── */
   .status-overlay {
     position: absolute;
     top: 0;
@@ -86,29 +65,31 @@ export const PdfViewerStyles = css`
     padding: 1rem;
     text-align: center;
   }
+
   .status-overlay .message {
     background-color: white;
     padding: 2rem;
-    border-radius: 5px;
-    box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   }
+
   .error-message {
-    color: red;
-    font-weight: bold;
+    color: #c0392b;
+    font-weight: 600;
   }
+
   .loader {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-top: 3px solid #3498db;
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
+    width: 36px;
+    height: 36px;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 0.5rem;
   }
+
   @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
+    to {
       transform: rotate(360deg);
     }
   }

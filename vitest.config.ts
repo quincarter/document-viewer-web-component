@@ -1,6 +1,12 @@
 import { defineConfig, mergeConfig } from "vitest/config";
-import type { Plugin } from "vite";
-import viteConfig from "./vite.config";
+import type { Plugin, UserConfig } from "vite";
+import viteConfigFn from "./vite.config";
+
+// Resolve the vite config function to a plain object for merging
+const viteConfig =
+  typeof viteConfigFn === "function"
+    ? (viteConfigFn({ command: "serve", mode: "test" }) as UserConfig)
+    : viteConfigFn;
 
 /**
  * Stubs Vite-specific worker/URL/WASM imports in the test environment.

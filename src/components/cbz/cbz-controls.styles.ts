@@ -2,52 +2,37 @@ import { css } from "lit";
 
 export const CbzControlsStyles = css`
   :host {
+    /* Layout tokens – inherited from ViewerControlsSharedStyles on the host */
     position: fixed;
     bottom: 1rem;
     left: 50%;
     transform: translateX(-50%);
     z-index: 10;
     display: flex;
-    gap: 1rem;
-    padding: 0.5rem 1rem;
-    background: rgba(0, 0, 0, 0.8);
-    border-radius: 8px;
-    color: white;
+    align-items: center;
+    gap: var(--viewer-ctrl-gap, 8px);
+    padding: 6px 12px;
+    background: var(--viewer-ctrl-bg, rgba(0, 0, 0, 0.75));
+    border-radius: var(--viewer-ctrl-pill-radius, 40px);
+    color: var(--viewer-ctrl-color, #ffffff);
     font-family: system-ui, -apple-system, sans-serif;
+    font-size: var(--viewer-ctrl-font-size, 0.85rem);
+    backdrop-filter: var(--viewer-ctrl-blur, blur(8px));
+    -webkit-backdrop-filter: var(--viewer-ctrl-blur, blur(8px));
     transition: opacity 0.2s ease;
+    user-select: none;
   }
 
   :host(:not(:hover)) {
-    opacity: 0.6;
-  }
-
-  button {
-    background: none;
-    border: none;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-    padding: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    border-radius: 4px;
-  }
-
-  button:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  button svg {
-    width: 1.2em;
-    height: 1.2em;
-    fill: currentColor;
+    opacity: 0.75;
   }
 
   .page-info {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
+    gap: 4px;
+    padding: 0 4px;
+    white-space: nowrap;
   }
 `;
+
