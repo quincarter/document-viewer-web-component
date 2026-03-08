@@ -35,4 +35,3 @@ export const CbzControlsStyles = css`
     white-space: nowrap;
   }
 `;
-

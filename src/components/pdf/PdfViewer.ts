@@ -385,7 +385,10 @@ export class PdfViewer extends LitElement {
   private _applyFitToView() {
     if (!this._contentArea || this._nativePageWidth <= 0) return;
     const containerWidth = this._contentArea.clientWidth - 32; // 1rem padding each side
-    const newScale = Math.max(0.5, Math.min(3, containerWidth / this._nativePageWidth));
+    const newScale = Math.max(
+      0.5,
+      Math.min(3, containerWidth / this._nativePageWidth),
+    );
     this._currentScale = Math.round(newScale * 100) / 100;
     this._renderCurrentPage();
   }
@@ -435,7 +438,7 @@ export class PdfViewer extends LitElement {
               ?disabled=${this._currentPageNumber <= 1 || !canNav}
             >
               <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
               </svg>
             </button>
 
@@ -459,10 +462,11 @@ export class PdfViewer extends LitElement {
               class="ctrl-btn icon-only"
               title="Next page"
               @click=${this._goToNextPage}
-              ?disabled=${this._currentPageNumber >= this._totalPages || !canNav}
+              ?disabled=${this._currentPageNumber >= this._totalPages ||
+              !canNav}
             >
               <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
               </svg>
             </button>
 
@@ -476,7 +480,9 @@ export class PdfViewer extends LitElement {
               ?disabled=${!canNav}
             >
               <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 3h7v2H5v5H3V3zm11 0h7v7h-2V5h-5V3zM3 14h2v5h5v2H3v-7zm16 5h-5v2h7v-7h-2v5z"/>
+                <path
+                  d="M3 3h7v2H5v5H3V3zm11 0h7v7h-2V5h-5V3zM3 14h2v5h5v2H3v-7zm16 5h-5v2h7v-7h-2v5z"
+                />
               </svg>
               Fit
             </button>

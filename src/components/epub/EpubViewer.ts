@@ -78,6 +78,40 @@ export class EpubViewer extends LitElement {
     console.log(`Controls pinned state changed: ${this.controlsPinned}`);
   }
 
+  /**
+   * Fired by epubjs whenever the visible spine item changes.
+   * Used to track the current page in scroll modes (replaces the broken
+   * DOM-scroll listener approach: `scroll` events don't bubble, so listening
+   * on bookContainer never fires for epubjs's inner views container).
+   */
+  // biome-ignore lint/suspicious/noExplicitAny: epubjs location type lacks complete typings
+  private _onEpubRelocated = (location: any) => {
+    if (this.flowType === "paginated") return; // paginated handled by _prevPage/_nextPage
+    const spineIndex: number = location?.start?.index ?? 0;
+    const newPage = spineIndex + 1;
+    if (newPage !== this.currentPage) {
+      this.currentPage = newPage;
+      this._dispatchPageChange();
+    }
+  };
+
+  /**
+   * After epubjs creates its views container (a direct DOM child of
+   * bookContainer), set `overflow-anchor: none` on it.
+   *
+   * Why: when epubjs prepends a previous section above the current scroll
+   * position, it manually adjusts `scrollTop` to compensate. The browser's
+   * built-in scroll-anchoring *also* adjusts `scrollTop` — the two fight,
+   * causing the visible snap-back on scroll-up. Disabling scroll-anchoring
+   * on that element lets epubjs be the sole owner of scroll adjustment.
+   */
+  private _setupScrollModeFixes() {
+    const viewsContainer = this.bookContainer?.firstElementChild;
+    if (viewsContainer instanceof HTMLElement) {
+      viewsContainer.style.overflowAnchor = "none";
+    }
+  }
+
   private _handleKeyPress(e: KeyboardEvent) {
     if (this.flowType === "paginated") {
       if (e.key === "ArrowRight") {
@@ -105,46 +139,6 @@ export class EpubViewer extends LitElement {
     }
   }
 
-  private _handleScroll() {
-    if (
-      this.flowType === "scrolled-continuous" &&
-      this.epubManager.isLoaded()
-    ) {
-      // Get visible section
-      const sections = Array.from(
-        this.bookContainer.querySelectorAll("[ref]"),
-      ) as HTMLElement[];
-      const containerRect = this.bookContainer.getBoundingClientRect();
-
-      // Find the most visible section
-      let maxVisibleArea = 0;
-      let mostVisibleSection: HTMLElement | null = null;
-
-      sections.forEach((section: HTMLElement) => {
-        const rect = section.getBoundingClientRect();
-        const visibleTop = Math.max(rect.top, containerRect.top);
-        const visibleBottom = Math.min(rect.bottom, containerRect.bottom);
-        const visibleArea = visibleBottom - visibleTop;
-
-        if (visibleArea > maxVisibleArea) {
-          maxVisibleArea = visibleArea;
-          mostVisibleSection = section;
-        }
-      });
-
-      if (mostVisibleSection) {
-        const href = (mostVisibleSection as HTMLElement).getAttribute("ref");
-        if (href) {
-          const index = this.epubManager.getPageFromHref(href);
-          if (index !== -1) {
-            this.currentPage = index + 1;
-            this._dispatchPageChange();
-          }
-        }
-      }
-    }
-  }
-
   private _saveCurrentSettings() {
     const settings: EpubViewerSettings = {
       fontSize: this.fontSize,
@@ -156,6 +150,10 @@ export class EpubViewer extends LitElement {
 
   private async _handleFlowTypeChange(e: CustomEvent) {
     const { flowType } = e.detail;
+
+    // Tear down previous scroll tracking before recreating the rendition
+    this.epubManager.removeRelocatedListener(this._onEpubRelocated);
+
     await this.epubManager.setFlowType(flowType, this.bookContainer, {
       width: this.bookContainer.clientWidth,
       height: this.bookContainer.clientHeight,
@@ -165,17 +163,10 @@ export class EpubViewer extends LitElement {
     this.flowType = flowType;
     this._saveCurrentSettings();
 
-    // Set up or remove scroll listener based on flow type
-    if (flowType === "scrolled-continuous") {
-      this.bookContainer.addEventListener(
-        "scroll",
-        this._handleScroll.bind(this),
-      );
-    } else {
-      this.bookContainer.removeEventListener(
-        "scroll",
-        this._handleScroll.bind(this),
-      );
+    // Re-attach scroll tracking and apply CSS fixes for non-paginated modes
+    if (flowType !== "paginated") {
+      this._setupScrollModeFixes();
+      this.epubManager.onRelocated(this._onEpubRelocated);
     }
   }
 
@@ -238,6 +229,14 @@ export class EpubViewer extends LitElement {
       this.epubManager.updateTheme(this.theme);
       this.epubManager.updateFontSize(this.fontSize);
 
+      // Set up scroll-mode fixes for non-paginated flow types.
+      // This must run after createRendition so epubjs has inserted its
+      // views container into bookContainer.
+      if (this.flowType !== "paginated") {
+        this._setupScrollModeFixes();
+        this.epubManager.onRelocated(this._onEpubRelocated);
+      }
+
       this.dispatchEvent(
         new CustomEvent("epub-loaded", {
           detail: { totalPages: this.totalPages },
@@ -283,6 +282,7 @@ export class EpubViewer extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    this.epubManager.removeRelocatedListener(this._onEpubRelocated);
     if (this.epubManager) {
       this.epubManager.destroy();
     }

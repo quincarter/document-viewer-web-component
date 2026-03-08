@@ -339,6 +339,16 @@ export class EpubManager {
     return !!this.rendition;
   }
 
+  // biome-ignore lint/suspicious/noExplicitAny: epubjs location type lacks complete typings
+  onRelocated(callback: (location: any) => void): void {
+    this.rendition?.on("relocated", callback);
+  }
+
+  // biome-ignore lint/suspicious/noExplicitAny: epubjs location type lacks complete typings
+  removeRelocatedListener(callback: (location: any) => void): void {
+    this.rendition?.off("relocated", callback);
+  }
+
   setFontSize(fontSize: string): void {
     if (this.rendition) {
       this.rendition.themes.default({
