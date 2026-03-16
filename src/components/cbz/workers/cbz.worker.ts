@@ -206,7 +206,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				// Send raw image buffer and let main thread handle image creation
 				(self as any).postMessage(
 					{
-						type: "CBZ_PAGE_RENDERED",
+						type: "cbzPageRendered",
 						documentId: currentDocumentId,
 						pageNumber: pageNumber,
 						imageData: imageBuffer,

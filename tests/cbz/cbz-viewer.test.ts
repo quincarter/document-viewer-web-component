@@ -315,6 +315,17 @@ describe("CbzViewer", () => {
 			expect(canvas.width).toBe(500);
 			expect(canvas.height).toBe(700);
 		});
+
+		it("handles _renderCurrentPage before document is loaded", async () => {
+			const el = await fixture<CbzViewer>(html`<cbz-viewer></cbz-viewer>`);
+			const testEl = el as unknown as TestCbzViewer;
+			testEl._currentDocumentId = null;
+
+			const spy = vi.spyOn(console, "error");
+			await testEl._renderCurrentPage();
+
+			expect(spy).not.toHaveBeenCalledWith("Cannot render page");
+		});
 	});
 
 	describe("edge cases", () => {

@@ -199,7 +199,8 @@ export class CbzViewer extends LitElement {
 
 	private async _renderCurrentPage() {
 		if (!this._cbzWorker || !this._currentDocumentId) {
-			console.error("Cannot render page");
+			// Silently return if not initialized yet.
+			// This can happen during initial ResizeObserver callback before document loads.
 			return;
 		}
 
