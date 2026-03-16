@@ -3,7 +3,7 @@ import { property } from "lit/decorators.js";
 import type { EpubFlowType } from "./utils/epub-utils";
 
 export class EpubTextControls extends LitElement {
-  static styles = css`
+	static styles = css`
     :host {
       display: block;
       color: var(--text-color, #333);
@@ -139,23 +139,23 @@ export class EpubTextControls extends LitElement {
     }
   `;
 
-  @property({ type: Number })
-  fontSize: number = 100;
+	@property({ type: Number })
+	fontSize: number = 100;
 
-  @property({ type: String })
-  theme: "light" | "dark" | "sepia" = "light";
+	@property({ type: String })
+	theme: "light" | "dark" | "sepia" = "light";
 
-  @property({ type: String })
-  flowType: EpubFlowType = "paginated";
+	@property({ type: String })
+	flowType: EpubFlowType = "paginated";
 
-  @property({ type: Boolean })
-  supportsDualPage: boolean = false;
+	@property({ type: Boolean })
+	supportsDualPage: boolean = false;
 
-  @property({ type: Boolean })
-  isDualPage: boolean = false;
+	@property({ type: Boolean })
+	isDualPage: boolean = false;
 
-  render() {
-    return html`
+	render() {
+		return html`
       <div class="text-controls">
         <div class="control-group">
           <h3>Text Size</h3>
@@ -175,25 +175,25 @@ export class EpubTextControls extends LitElement {
           <h3>Theme</h3>
           <div class="theme-buttons">
             <div
-              class="theme-button light ${this.theme === "light"
-                ? "active-theme"
-                : ""}"
+              class="theme-button light ${
+								this.theme === "light" ? "active-theme" : ""
+							}"
               @click=${() => this._handleThemeChange("light")}
             >
               Light
             </div>
             <div
-              class="theme-button dark ${this.theme === "dark"
-                ? "active-theme"
-                : ""}"
+              class="theme-button dark ${
+								this.theme === "dark" ? "active-theme" : ""
+							}"
               @click=${() => this._handleThemeChange("dark")}
             >
               Dark
             </div>
             <div
-              class="theme-button sepia ${this.theme === "sepia"
-                ? "active-theme"
-                : ""}"
+              class="theme-button sepia ${
+								this.theme === "sepia" ? "active-theme" : ""
+							}"
               @click=${() => this._handleThemeChange("sepia")}
             >
               Sepia
@@ -219,8 +219,9 @@ export class EpubTextControls extends LitElement {
           </div>
         </div>
 
-        ${this.supportsDualPage
-          ? html`
+        ${
+					this.supportsDualPage
+						? html`
               <div class="control-group">
                 <h3>View Mode</h3>
                 <div class="button-group">
@@ -239,53 +240,54 @@ export class EpubTextControls extends LitElement {
                 </div>
               </div>
             `
-          : nothing}
+						: nothing
+				}
       </div>
     `;
-  }
+	}
 
-  private _handleFontSizeChange(e: Event) {
-    const value = Number((e.target as HTMLInputElement).value);
-    this.fontSize = value;
-    this.dispatchEvent(
-      new CustomEvent("font-size-changed", {
-        detail: { fontSize: value },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
+	private _handleFontSizeChange(e: Event) {
+		const value = Number((e.target as HTMLInputElement).value);
+		this.fontSize = value;
+		this.dispatchEvent(
+			new CustomEvent("font-size-changed", {
+				detail: { fontSize: value },
+				bubbles: true,
+				composed: true,
+			}),
+		);
+	}
 
-  private _handleThemeChange(theme: "light" | "dark" | "sepia") {
-    this.theme = theme;
-    this.dispatchEvent(
-      new CustomEvent("theme-changed", {
-        detail: { theme },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
+	private _handleThemeChange(theme: "light" | "dark" | "sepia") {
+		this.theme = theme;
+		this.dispatchEvent(
+			new CustomEvent("theme-changed", {
+				detail: { theme },
+				bubbles: true,
+				composed: true,
+			}),
+		);
+	}
 
-  private _handleFlowTypeChange(flowType: EpubFlowType) {
-    this.flowType = flowType;
-    this.dispatchEvent(
-      new CustomEvent("flow-type-changed", {
-        detail: { flowType },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
+	private _handleFlowTypeChange(flowType: EpubFlowType) {
+		this.flowType = flowType;
+		this.dispatchEvent(
+			new CustomEvent("flow-type-changed", {
+				detail: { flowType },
+				bubbles: true,
+				composed: true,
+			}),
+		);
+	}
 
-  private _handleViewModeChange(isDualPage: boolean) {
-    this.isDualPage = isDualPage;
-    this.dispatchEvent(
-      new CustomEvent("view-mode-changed", {
-        detail: { isDualPage },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
+	private _handleViewModeChange(isDualPage: boolean) {
+		this.isDualPage = isDualPage;
+		this.dispatchEvent(
+			new CustomEvent("view-mode-changed", {
+				detail: { isDualPage },
+				bubbles: true,
+				composed: true,
+			}),
+		);
+	}
 }
