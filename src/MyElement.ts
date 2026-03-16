@@ -9,17 +9,17 @@ import "./components/document-viewer";
  * @csspart button - The button
  */
 export class MyElement extends LitElement {
-  /**
-   * The URL or File object of the document to be displayed.
-   */
-  @property({ type: String })
-  src = "";
+	/**
+	 * The URL or File object of the document to be displayed.
+	 */
+	@property({ type: String })
+	src = "";
 
-  render() {
-    return html`<document-viewer .src=${this.src}></document-viewer>`;
-  }
+	render() {
+		return html`<document-viewer .src=${this.src}></document-viewer>`;
+	}
 
-  static styles = css`
+	static styles = css`
     :host {
       display: block;
       width: 100%;
@@ -29,7 +29,7 @@ export class MyElement extends LitElement {
 }
 
 declare global {
-  interface HTMLElementTagNameMap {
-    "my-element": MyElement;
-  }
+	interface HTMLElementTagNameMap {
+		"my-element": MyElement;
+	}
 }

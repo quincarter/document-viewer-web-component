@@ -1,430 +1,657 @@
 // src/components/pdf/PdfViewer.ts
 
+import pdfiumWasmUrl from "@hyzyla/pdfium/pdfium.wasm?url";
 // Import WASM URLs (Vite syntax)
 import { html, LitElement, type PropertyValueMap } from "lit";
 import { property, query, state } from "lit/decorators.js";
-import { PdfViewerStyles } from "./pdf-viewer.styles";
 import { ViewerControlsSharedStyles } from "../common/viewer-controls.styles";
-import pdfiumWasmUrl from "@hyzyla/pdfium/pdfium.wasm?url";
+import { PdfViewerStyles } from "./pdf-viewer.styles";
 // Import worker instances (Vite inline worker syntax)
 import PdfWorker from "./workers/pdf.worker?worker&inline";
 
 interface DocumentWorker extends Worker {
-  postMessage(message: unknown, transfer: Transferable[]): void;
-  postMessage(message: unknown, options?: StructuredSerializeOptions): void;
+	postMessage(message: unknown, transfer: Transferable[]): void;
+	postMessage(message: unknown, options?: StructuredSerializeOptions): void;
+}
+
+interface HTMLCanvasElementWithOffscreen extends HTMLCanvasElement {
+	transferControlToOffscreen(): OffscreenCanvas;
+}
+
+interface WorkerMessage {
+	type: string;
+	success?: boolean;
+	messageId?: number;
+	pageCount?: number;
+	documentId?: string;
+	scale?: number;
+	width?: number;
+	height?: number;
+	pageNumber?: number;
+	bitmap?: ImageBitmap;
+	error?: { message: string };
+	// biome-ignore lint/suspicious/noExplicitAny: Worker data can contain arbitrary payloads
+	[key: string]: any;
+}
+
+interface RenderPagePayload {
+	pageNumber: number;
+	scale: number;
+	documentId: string | null;
+	fitMode?: "width";
+	containerWidth?: number;
 }
 
 export class PdfViewer extends LitElement {
-  @property({ type: String })
-  src: string | File | null = null;
+	@property({ type: String })
+	src: string | File | null = null;
 
-  @property({ type: String })
-  viewerTitle: string = "PDF Viewer";
+	@property({ type: String })
+	viewerTitle: string = "PDF Viewer";
 
-  @state()
-  private _isLoading: boolean = false;
-  @state()
-  private _errorMessage: string | null = null;
-  @state()
-  private _currentPageNumber: number = 1; // 1-indexed for UI
-  @state()
-  private _totalPages: number = 0;
-  @state()
-  private _currentScale: number = 1.0; // overridden by fit-to-view on first render
-  @state()
-  private _isFitToView: boolean = true;
-  @state()
-  private _currentDocumentId: string | null = null; // To correlate worker responses
-  @state()
-  private _isInitialized: boolean = false;
-  /** Native page dimensions from the last rendered page (device pixels before scale) */
-  private _nativePageWidth: number = 0;
+	@state()
+	private _isLoading: boolean = false;
+	@state()
+	private _errorMessage: string | null = null;
+	@state()
+	private _currentPageNumber: number = 1; // 1-indexed for UI
+	@state()
+	private _totalPages: number = 0;
+	@state()
+	private _currentScale: number = 1.0; // The scale at which the worker rendered the current bitmap
+	@state()
+	private _displayScale: number = 1.0; // The scale currently applied via CSS
+	@state()
+	private _isFitToView: boolean = true;
+	@state()
+	private _currentDocumentId: string | null = null; // To correlate worker responses
+	@state()
+	private _isInitialized: boolean = false;
 
-  @query("#viewerCanvas")
-  private _canvas!: HTMLCanvasElement;
-  @query(".content-area")
-  private _contentArea!: HTMLElement;
-  private _canvasContext!: CanvasRenderingContext2D | null;
-  private _resizeObserver: ResizeObserver | null = null;
+	@state()
+	private _originalPageWidth: number = 0;
+	@state()
+	private _originalPageHeight: number = 0;
 
-  private _pdfWorker!: DocumentWorker | null;
-  private _workerMessageIdCounter = 0;
-  private _pendingWorkerMessages = new Map<number, (value: unknown) => void>();
-  private _pendingFileLoad: { source: string | File } | null = null;
+	@query("#viewerCanvas")
+	private _canvas!: HTMLCanvasElement;
+	@query(".content-area")
+	private _contentArea!: HTMLElement;
+	private _resizeObserver: ResizeObserver | null = null;
+	private _zoomDebounceTimer: number | null = null;
 
-  static styles = [ViewerControlsSharedStyles, PdfViewerStyles];
+	private _pdfWorkers: DocumentWorker[] = [];
+	private _workerMessageIdCounter = 0;
+	private _pendingWorkerMessages = new Map<number, (value: unknown) => void>();
+	private _pendingFileLoad: { source: string | File } | null = null;
 
-  constructor() {
-    super();
-    this._initializeWorkers();
-  }
+	private _pageCache = new Map<
+		number,
+		{ bitmap: ImageBitmap; width: number; height: number; scale: number }
+	>();
+	private _prefetchQueue: number[] = [];
+	private _busyWorkers = new Set<DocumentWorker>();
+	private _initializedWorkersCount = 0;
+	private readonly _poolSize = 4;
 
-  private _initializeWorkers() {
-    this._pdfWorker = new PdfWorker() as DocumentWorker;
-    this._pdfWorker.onmessage = (e) => this._handleWorkerMessage(e.data, "PDF");
-    this._pdfWorker.onerror = (e) => this._handleWorkerError(e, "PDF");
+	static styles = [ViewerControlsSharedStyles, PdfViewerStyles];
 
-    // Manually construct absolute URL for WASM file
-    const wasmUrl = new URL(pdfiumWasmUrl, window.location.origin).toString();
+	constructor() {
+		super();
+		this._initializeWorkers();
+	}
 
-    this._sendMessageToWorker(this._pdfWorker, "init", {
-      wasmUrl: wasmUrl,
-    });
-  }
+	private _initializeWorkers() {
+		// Clean up existing workers if any
+		for (const worker of this._pdfWorkers) {
+			worker.terminate();
+		}
+		this._pdfWorkers = [];
+		this._busyWorkers.clear();
+		this._initializedWorkersCount = 0;
 
-  connectedCallback() {
-    super.connectedCallback();
-    if (!this._pdfWorker) this._initializeWorkers();
-  }
+		const wasmUrl = new URL(pdfiumWasmUrl, window.location.origin).toString();
 
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this._resizeObserver?.disconnect();
-    this._resizeObserver = null;
-    this._pdfWorker?.terminate();
-    this._pdfWorker = null;
-    for (const resolve of this._pendingWorkerMessages.values()) {
-      resolve({ type: "error", message: "Worker terminated" });
-    }
-    this._pendingWorkerMessages.clear();
-  }
+		for (let i = 0; i < this._poolSize; i++) {
+			const worker = new PdfWorker() as DocumentWorker;
+			worker.onmessage = (e) =>
+				this._handleWorkerMessage(e.data as WorkerMessage, `PDF-${i}`);
+			worker.onerror = (e) => this._handleWorkerError(e, `PDF-${i}`);
 
-  protected firstUpdated(
-    // biome-ignore lint/suspicious/noExplicitAny: Lit PropertyValueMap requires any for type guard
-    _changedProperties: PropertyValueMap<any> | Map<PropertyKey, unknown>,
-  ): void {
-    if (this._canvas) {
-      this._canvasContext = this._canvas.getContext("2d");
-    } else {
-      console.error("PDF Viewer: Canvas element not found.");
-      this._errorMessage = "Canvas element could not be initialized.";
-    }
+			this._pdfWorkers.push(worker);
 
-    // Watch for container size changes to re-apply fit-to-view
-    if (this._contentArea) {
-      this._resizeObserver = new ResizeObserver(() => {
-        if (this._isFitToView && this._nativePageWidth > 0) {
-          this._applyFitToView();
-        }
-      });
-      this._resizeObserver.observe(this._contentArea);
-    }
+			this._sendMessageToWorker(worker, "init", {
+				wasmUrl: wasmUrl,
+			});
+		}
+	}
 
-    if (this.src) {
-      this._loadFile(this.src);
-    }
-  }
+	connectedCallback() {
+		super.connectedCallback();
+		if (this._pdfWorkers.length === 0) this._initializeWorkers();
+	}
 
-  protected updated(
-    // biome-ignore lint/suspicious/noExplicitAny: Lit PropertyValueMap requires any for type guard
-    changedProperties: PropertyValueMap<any> | Map<PropertyKey, unknown>,
-  ): void {
-    if (changedProperties.has("src") && this.src) {
-      this._resetViewerState();
-      this._loadFile(this.src);
-    }
-  }
+	disconnectedCallback() {
+		super.disconnectedCallback();
+		this._resizeObserver?.disconnect();
+		this._resizeObserver = null;
+		if (this._zoomDebounceTimer) {
+			window.clearTimeout(this._zoomDebounceTimer);
+			this._zoomDebounceTimer = null;
+		}
+		for (const worker of this._pdfWorkers) {
+			worker.terminate();
+		}
+		this._pdfWorkers = [];
+		for (const resolve of this._pendingWorkerMessages.values()) {
+			resolve({ type: "error", message: "Worker terminated" });
+		}
+		this._pendingWorkerMessages.clear();
+		this._clearPageCache();
+	}
 
-  private _resetViewerState() {
-    // this._isLoading = false;
-    this._errorMessage = null;
-    this._currentPageNumber = 1;
-    this._totalPages = 0;
-    this._currentDocumentId = `doc-${Date.now()}`;
-    if (this._canvasContext && this._canvas) {
-      this._canvasContext.clearRect(
-        0,
-        0,
-        this._canvas.width,
-        this._canvas.height,
-      );
-      this._canvas.width = 300;
-      this._canvas.height = 150;
-    }
-  }
+	private _clearPageCache() {
+		for (const entry of this._pageCache.values()) {
+			entry.bitmap.close();
+		}
+		this._pageCache.clear();
+	}
 
-  private _handleError(message: string) {
-    this._errorMessage = message;
-    this._isLoading = false;
-    console.error("PDF Viewer Error:", message);
-  }
+	protected firstUpdated(
+		_changedProperties: PropertyValueMap<this> | Map<PropertyKey, unknown>,
+	): void {
+		if (this._canvas) {
+			const mainWorker = this._pdfWorkers[0];
+			const canvas = this._canvas as HTMLCanvasElementWithOffscreen;
+			// Transfer control to worker for off-main-thread rendering
+			if (
+				"transferControlToOffscreen" in canvas &&
+				mainWorker &&
+				typeof canvas.transferControlToOffscreen === "function"
+			) {
+				try {
+					const offscreen = canvas.transferControlToOffscreen();
+					mainWorker.postMessage(
+						{ type: "initCanvas", payload: { canvas: offscreen } },
+						[offscreen],
+					);
+				} catch (error) {
+					console.error(
+						"PDF Viewer: Failed to transfer control to offscreen canvas.",
+						error,
+					);
+					this._errorMessage =
+						"Failed to initialize high-performance rendering.";
+				}
+			} else {
+				console.warn(
+					"PDF Viewer: OffscreenCanvas not supported in this browser.",
+				);
+				this._errorMessage =
+					"Your browser does not support high-performance rendering.";
+			}
+		} else {
+			console.error("PDF Viewer: Canvas element not found.");
+			this._errorMessage = "Canvas element could not be initialized.";
+		}
 
-  private async _loadFile(source: string | File) {
-    if (!this._isInitialized) {
-      console.log("Waiting for PDFium initialization...");
-      this._pendingFileLoad = { source };
-      return;
-    }
+		// Watch for container size changes to re-apply fit-to-view
+		if (this._contentArea) {
+			this._resizeObserver = new ResizeObserver(() => {
+				if (this._isFitToView) {
+					this._applyFitToView();
+				}
+			});
+			this._resizeObserver.observe(this._contentArea);
+		}
 
-    this._isLoading = true;
-    this._errorMessage = null;
+		if (this.src) {
+			this._loadFile(this.src);
+		}
+	}
 
-    try {
-      let buffer: ArrayBuffer;
+	protected updated(
+		changedProperties: PropertyValueMap<this> | Map<PropertyKey, unknown>,
+	): void {
+		if (changedProperties.has("src") && this.src) {
+			this._resetViewerState();
+			this._loadFile(this.src);
+		}
+	}
 
-      if (typeof source === "string") {
-        const response = await fetch(source);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file: ${response.statusText}`);
-        }
-        buffer = await response.arrayBuffer();
-      } else {
-        buffer = await source.arrayBuffer();
-      }
+	private _resetViewerState() {
+		// this._isLoading = false;
+		this._errorMessage = null;
+		this._currentPageNumber = 1;
+		this._totalPages = 0;
+		this._currentDocumentId = `doc-${Date.now()}`;
+		this._clearPageCache();
+	}
 
-      // Check if it's a PDF
-      const header = new Uint8Array(buffer.slice(0, 5));
-      const isPDF =
-        header[0] === 0x25 && // %
-        header[1] === 0x50 && // P
-        header[2] === 0x44 && // D
-        header[3] === 0x46 && // F
-        header[4] === 0x2d; // -
+	private _handleError(message: string) {
+		this._errorMessage = message;
+		this._isLoading = false;
+		console.error("PDF Viewer Error:", message);
+	}
 
-      if (!isPDF) {
-        throw new Error("Not a valid PDF file");
-      }
+	private async _loadFile(source: string | File) {
+		if (!this._isInitialized) {
+			console.log("Waiting for PDFium initialization...");
+			this._pendingFileLoad = { source };
+			return;
+		}
 
-      if (!this._pdfWorker) {
-        throw new Error("PDF worker not initialized");
-      }
+		this._isLoading = true;
+		this._errorMessage = null;
 
-      await this._sendMessageToWorker(this._pdfWorker, "loadPdf", {
-        pdfBuffer: buffer,
-        documentId: this._currentDocumentId,
-      });
-    } catch (error) {
-      this._handleError(`Failed to load file: ${(error as Error).message}`);
-    }
-  }
+		try {
+			let buffer: ArrayBuffer;
 
-  private _renderCurrentPage() {
-    if (this._totalPages === 0 || this._isLoading) return;
-    // this._isLoading = true; // avoid setting this here to avoid flicker. add back if it causes issues
-    this._errorMessage = null;
+			if (typeof source === "string") {
+				const response = await fetch(source);
+				if (!response.ok) {
+					throw new Error(`Failed to fetch file: ${response.statusText}`);
+				}
+				buffer = await response.arrayBuffer();
+			} else {
+				buffer = await source.arrayBuffer();
+			}
 
-    const pageNumToRender = this._currentPageNumber - 1; // Workers use 0-indexed
+			// Check if it's a PDF
+			const header = new Uint8Array(buffer.slice(0, 5));
+			const isPDF =
+				header[0] === 0x25 && // %
+				header[1] === 0x50 && // P
+				header[2] === 0x44 && // D
+				header[3] === 0x46 && // F
+				header[4] === 0x2d; // -
 
-    if (this._pdfWorker) {
-      this._sendMessageToWorker(this._pdfWorker, "renderPage", {
-        pageNumber: pageNumToRender,
-        scale: this._currentScale,
-        documentId: this._currentDocumentId,
-      });
-    } else {
-      this._handleError("PDF worker not initialized");
-      this._isLoading = false;
-    }
-  }
+			if (!isPDF) {
+				throw new Error("Not a valid PDF file");
+			}
 
-  private _drawPageToCanvas(
-    pixelDataBuffer: ArrayBuffer,
-    width: number,
-    height: number,
-  ) {
-    if (!this._canvas || !this._canvasContext) {
-      this._handleError("Canvas not initialized");
-      return;
-    }
+			if (this._pdfWorkers.length === 0) {
+				throw new Error("PDF workers not initialized");
+			}
 
-    try {
-      const imageData = new ImageData(
-        new Uint8ClampedArray(pixelDataBuffer),
-        width,
-        height,
-      );
+			// Load the PDF into all workers
+			const loadPromises = this._pdfWorkers.map((worker) => {
+				// We don't transfer the buffer because we need it for all workers
+				// In a real app we might use SharedArrayBuffer if available
+				return this._sendMessageToWorker(worker, "loadPdf", {
+					pdfBuffer: buffer, // This will be cloned
+					documentId: this._currentDocumentId,
+				});
+			});
 
-      this._canvas.width = width;
-      this._canvas.height = height;
-      this._canvasContext.clearRect(0, 0, width, height);
-      this._canvasContext.putImageData(imageData, 0, 0);
-    } catch (error) {
-      this._handleError(
-        `Failed to draw to canvas: ${(error as Error).message}`,
-      );
-    }
-  }
+			await Promise.all(loadPromises);
+		} catch (error) {
+			this._handleError(`Failed to load file: ${(error as Error).message}`);
+		}
+	}
 
-  // biome-ignore lint/suspicious/noExplicitAny: Worker message data has dynamic shape
-  private _handleWorkerMessage(data: any, workerName: string) {
-    const { type, success, messageId } = data;
+	private _renderCurrentPage() {
+		if (this._totalPages === 0 || this._isLoading) return;
+		this._errorMessage = null;
 
-    if (messageId != null && this._pendingWorkerMessages.has(messageId)) {
-      const resolve = this._pendingWorkerMessages.get(messageId);
-      if (!resolve) return;
-      this._pendingWorkerMessages.delete(messageId);
-      resolve(data);
-    }
+		const pageNumToRender = this._currentPageNumber - 1; // Workers use 0-indexed
 
-    switch (type) {
-      case "libraryInitialized":
-        if (success) {
-          console.log("PDFium initialization complete");
-          this._isInitialized = true;
+		// Check cache
+		const cached = this._pageCache.get(pageNumToRender);
+		const mainWorker = this._pdfWorkers[0];
 
-          if (this._pendingFileLoad) {
-            console.log("Processing pending file load");
-            this._loadFile(this._pendingFileLoad.source);
-            this._pendingFileLoad = null;
-          }
-        }
-        break;
+		if (cached && cached.scale === this._currentScale) {
+			// Fast path: draw from cache
+			// We clone the bitmap for the worker because it will close it after drawing
+			// or we can just send it and remove from cache?
+			// Better: send the bitmap and remove it from cache, then it will be re-added if we prefetch again.
+			// Actually, if we want to keep it in memory, we should clone it.
+			// createImageBitmap is efficient.
 
-      case "pdfLoaded":
-        if (success) {
-          this._totalPages = data.pageCount;
-          this._currentDocumentId = data.documentId;
-          this._isLoading = false;
-          // Trigger initial page render
-          this._renderCurrentPage();
-        } else {
-          this._handleError("Failed to load PDF");
-        }
-        break;
+			createImageBitmap(cached.bitmap).then((clonedBitmap) => {
+				this._sendMessageToWorker(
+					mainWorker,
+					"drawBitmap",
+					{
+						bitmap: clonedBitmap,
+						width: cached.width,
+						height: cached.height,
+						pageNumber: pageNumToRender,
+						scale: cached.scale,
+					},
+					[clonedBitmap],
+				);
+			});
+			return;
+		}
 
-      case "pageRendered":
-        if (success && data.imageData) {
-          // Store native width (pixel width at the rendered scale) to enable fit-to-view
-          if (this._currentScale !== 0) {
-            this._nativePageWidth = Math.round(data.width / this._currentScale);
-          }
-          this._drawPageToCanvas(data.imageData, data.width, data.height);
-          this._isLoading = false;
+		if (mainWorker) {
+			const payload: RenderPagePayload = {
+				pageNumber: pageNumToRender,
+				scale: this._currentScale,
+				documentId: this._currentDocumentId,
+			};
 
-          // On first render after load, apply fit-to-view if enabled
-          if (this._isFitToView) {
-            this._applyFitToView();
-          }
-        } else {
-          this._handleError("Failed to render page");
-        }
-        break;
+			if (this._isFitToView && this._contentArea) {
+				payload.fitMode = "width";
+				payload.containerWidth = this._contentArea.clientWidth - 32;
+			}
 
-      case "error":
-        this._handleError(data.error?.message || "Unknown error occurred");
-        break;
+			this._sendMessageToWorker(mainWorker, "renderPage", payload);
+		} else {
+			this._handleError("PDF worker not initialized");
+			this._isLoading = false;
+		}
+	}
 
-      default:
-        console.warn(`Unknown message type from ${workerName} worker:`, data);
-    }
-  }
+	private _prefetchNextPages() {
+		if (this._totalPages === 0) return;
 
-  private _handleWorkerError(error: Event | ErrorEvent, workerName: string) {
-    console.error(`Error in ${workerName} worker:`, error);
-    this._handleError(
-      error instanceof ErrorEvent ? error.message : "Worker error occurred",
-    );
-  }
+		const currentIdx = this._currentPageNumber - 1;
+		const nextPages = [];
+		// Next 5 pages
+		for (let i = 1; i <= 5; i++) {
+			const nextIdx = currentIdx + i;
+			if (nextIdx < this._totalPages) nextPages.push(nextIdx);
+		}
+		// Also keep previous 2 pages
+		for (let i = 1; i <= 2; i++) {
+			const prevIdx = currentIdx - i;
+			if (prevIdx >= 0) nextPages.push(prevIdx);
+		}
 
-  private _sendMessageToWorker(
-    worker: DocumentWorker,
-    type: string,
-    payload: unknown,
-    transferList?: Transferable[],
-  ): Promise<unknown> {
-    return new Promise((resolve) => {
-      const messageId = this._workerMessageIdCounter++;
-      this._pendingWorkerMessages.set(messageId, resolve);
-      worker.postMessage({ type, payload, messageId }, transferList || []);
+		// Filter out pages already in cache
+		const pagesToFetch = nextPages.filter((p) => {
+			const cached = this._pageCache.get(p);
+			return !cached || cached.scale !== this._currentScale;
+		});
 
-      setTimeout(() => {
-        if (this._pendingWorkerMessages.has(messageId)) {
-          this._pendingWorkerMessages.delete(messageId);
-          resolve({
-            type: "error",
-            message: `Worker response timeout (${type})`,
-          });
-        }
-      }, 30000);
-    });
-  }
+		// Clean up cache for pages far away
+		for (const pageIdx of this._pageCache.keys()) {
+			if (Math.abs(pageIdx - currentIdx) > 10) {
+				const entry = this._pageCache.get(pageIdx);
+				entry?.bitmap.close();
+				this._pageCache.delete(pageIdx);
+			}
+		}
 
-  private _goToPreviousPage() {
-    if (this._currentPageNumber > 1) {
-      this._currentPageNumber--;
-      this._renderCurrentPage();
-    }
-  }
+		this._prefetchQueue = pagesToFetch;
+		this._processPrefetchQueue();
+	}
 
-  private _goToNextPage() {
-    if (this._currentPageNumber < this._totalPages) {
-      this._currentPageNumber++;
-      this._renderCurrentPage();
-    }
-  }
+	private _processPrefetchQueue() {
+		if (this._prefetchQueue.length === 0) return;
 
-  private _handlePageInputChange(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const page = parseInt(input.value, 10);
-    if (!Number.isNaN(page) && page >= 1 && page <= this._totalPages) {
-      this._currentPageNumber = page;
-      this._renderCurrentPage();
-    } else {
-      input.value = this._currentPageNumber.toString();
-    }
-  }
+		// Use all workers except the main one for pre-fetching
+		for (let i = 1; i < this._pdfWorkers.length; i++) {
+			const worker = this._pdfWorkers[i];
+			if (!this._busyWorkers.has(worker) && this._prefetchQueue.length > 0) {
+				const pageIdx = this._prefetchQueue.shift();
+				if (pageIdx === undefined) continue;
 
-  private _handleZoomSliderChange(e: Event) {
-    const input = e.target as HTMLInputElement;
-    this._currentScale = parseFloat(input.value);
-    this._isFitToView = false;
-    this._renderCurrentPage();
-  }
+				this._busyWorkers.add(worker);
 
-  private _handleFitToView() {
-    this._isFitToView = true;
-    if (this._nativePageWidth > 0) {
-      this._applyFitToView();
-    }
-  }
+				this._sendMessageToWorker(worker, "renderToBitmap", {
+					pageNumber: pageIdx,
+					scale: this._currentScale,
+				}).finally(() => {
+					this._busyWorkers.delete(worker);
+					this._processPrefetchQueue();
+				});
+			}
+		}
+	}
 
-  /**
-   * Computes and applies a scale so the page fills the content area width.
-   * Uses the native page pixel width (at scale=1) for the calculation.
-   */
-  private _applyFitToView() {
-    if (!this._contentArea || this._nativePageWidth <= 0) return;
-    const containerWidth = this._contentArea.clientWidth - 32; // 1rem padding each side
-    const newScale = Math.max(
-      0.5,
-      Math.min(3, containerWidth / this._nativePageWidth),
-    );
-    this._currentScale = Math.round(newScale * 100) / 100;
-    this._renderCurrentPage();
-  }
+	private _handleWorkerMessage(data: WorkerMessage, workerName: string) {
+		const { type, success, messageId } = data;
 
-  render() {
-    const zoomPercent = Math.round(this._currentScale * 100);
-    const canNav = this._totalPages > 0 && !this._isLoading;
+		if (messageId != null && this._pendingWorkerMessages.has(messageId)) {
+			const resolve = this._pendingWorkerMessages.get(messageId);
+			if (!resolve) return;
+			this._pendingWorkerMessages.delete(messageId);
+			resolve(data);
+		}
 
-    return html`
+		switch (type) {
+			case "libraryInitialized":
+				if (success) {
+					console.log(`${workerName} initialization complete`);
+					this._initializedWorkersCount++;
+
+					if (this._initializedWorkersCount === this._poolSize) {
+						this._isInitialized = true;
+						if (this._pendingFileLoad) {
+							console.log("Processing pending file load");
+							this._loadFile(this._pendingFileLoad.source);
+							this._pendingFileLoad = null;
+						}
+					}
+				}
+				break;
+
+			case "pdfLoaded":
+				if (success) {
+					// Only the main worker response is needed for metadata
+					if (workerName === "PDF-0") {
+						this._totalPages = data.pageCount || 0;
+						this._currentDocumentId = data.documentId || null;
+						this._isLoading = false;
+						// Trigger initial page render
+						this._renderCurrentPage();
+					}
+				} else {
+					this._handleError("Failed to load PDF");
+				}
+				break;
+
+			case "pageRendered":
+				if (success) {
+					// Update scale from worker (relevant for fit-to-view)
+					if (data.scale) {
+						this._currentScale = data.scale;
+						this._displayScale = data.scale;
+					}
+					if (data.width && data.height && data.scale) {
+						this._originalPageWidth = data.width / data.scale;
+						this._originalPageHeight = data.height / data.scale;
+					}
+					this._isLoading = false;
+					// Trigger pre-fetching after a successful render
+					this._prefetchNextPages();
+				} else {
+					this._handleError("Failed to render page");
+				}
+				break;
+
+			case "pageToBitmap":
+				if (success) {
+					const { pageNumber, bitmap, width, height, scale } = data;
+					if (pageNumber !== undefined && bitmap && width && height && scale) {
+						// Add to cache
+						// If we already have a bitmap for this page at a different scale, close it
+						const existing = this._pageCache.get(pageNumber);
+						if (existing) {
+							existing.bitmap.close();
+						}
+						this._pageCache.set(pageNumber, { bitmap, width, height, scale });
+					}
+				}
+				break;
+
+			case "error":
+				this._handleError(data.error?.message || "Unknown error occurred");
+				break;
+
+			default:
+				console.warn(`Unknown message type from ${workerName} worker:`, data);
+		}
+	}
+
+	private _handleWorkerError(error: Event | ErrorEvent, workerName: string) {
+		console.error(`Error in ${workerName} worker:`, error);
+		this._handleError(
+			error instanceof ErrorEvent ? error.message : "Worker error occurred",
+		);
+	}
+
+	private _sendMessageToWorker(
+		worker: DocumentWorker,
+		type: string,
+		payload: unknown,
+		transferList?: Transferable[],
+	): Promise<unknown> {
+		return new Promise((resolve) => {
+			const messageId = this._workerMessageIdCounter++;
+			this._pendingWorkerMessages.set(messageId, resolve);
+			worker.postMessage({ type, payload, messageId }, transferList || []);
+
+			setTimeout(() => {
+				if (this._pendingWorkerMessages.has(messageId)) {
+					this._pendingWorkerMessages.delete(messageId);
+					resolve({
+						type: "error",
+						message: `Worker response timeout (${type})`,
+					});
+				}
+			}, 30000);
+		});
+	}
+
+	private _goToPreviousPage() {
+		if (this._currentPageNumber > 1) {
+			this._currentPageNumber--;
+			this._renderCurrentPage();
+		}
+	}
+
+	private _goToNextPage() {
+		if (this._currentPageNumber < this._totalPages) {
+			this._currentPageNumber++;
+			this._renderCurrentPage();
+		}
+	}
+
+	private _handlePageInputChange(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const page = parseInt(input.value, 10);
+		if (!Number.isNaN(page) && page >= 1 && page <= this._totalPages) {
+			this._currentPageNumber = page;
+			this._renderCurrentPage();
+		} else {
+			input.value = this._currentPageNumber.toString();
+		}
+	}
+
+	private _handleZoomSliderChange(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const newScale = parseFloat(input.value);
+		this._isFitToView = false;
+		this._displayScale = newScale;
+
+		// Clear cache on zoom change
+		this._clearPageCache();
+
+		// Debounce high-quality re-render
+		if (this._zoomDebounceTimer) {
+			window.clearTimeout(this._zoomDebounceTimer);
+		}
+
+		this._zoomDebounceTimer = window.setTimeout(() => {
+			const mainWorker = this._pdfWorkers[0];
+			if (mainWorker) {
+				this._sendMessageToWorker(mainWorker, "zoom", {
+					scale: newScale,
+				});
+			}
+			this._zoomDebounceTimer = null;
+		}, 150);
+	}
+
+	private _handleFitToView() {
+		this._isFitToView = true;
+		this._clearPageCache();
+		this._applyFitToView(true); // immediate if user clicked
+	}
+
+	/**
+	 * Sends a zoom message to the worker with fit-to-width instruction.
+	 */
+	private _applyFitToView(immediate = false) {
+		const mainWorker = this._pdfWorkers[0];
+		if (!this._contentArea || !mainWorker || !this._originalPageWidth) return;
+
+		const containerWidth = this._contentArea.clientWidth - 32; // 1rem padding each side
+		const newScale = Math.max(
+			0.5,
+			Math.min(3, containerWidth / this._originalPageWidth),
+		);
+		this._displayScale = newScale;
+
+		const requestZoom = () => {
+			this._sendMessageToWorker(mainWorker, "zoom", {
+				fitMode: "width",
+				containerWidth: containerWidth,
+			});
+			this._zoomDebounceTimer = null;
+		};
+
+		if (this._zoomDebounceTimer) {
+			window.clearTimeout(this._zoomDebounceTimer);
+		}
+
+		if (immediate) {
+			requestZoom();
+		} else {
+			this._zoomDebounceTimer = window.setTimeout(requestZoom, 150);
+		}
+	}
+
+	render() {
+		const zoomPercent = Math.round(this._displayScale * 100);
+		const canNav = this._totalPages > 0 && !this._isLoading;
+
+		const canvasWidth = this._originalPageWidth
+			? `${Math.round(this._originalPageWidth * this._displayScale)}px`
+			: "auto";
+		const canvasHeight = this._originalPageHeight
+			? `${Math.round(this._originalPageHeight * this._displayScale)}px`
+			: "auto";
+
+		return html`
       <div class="viewer-container">
         <main class="content-area">
-          <canvas id="viewerCanvas"></canvas>
-          ${this._isLoading
-            ? html`<div class="status-overlay">
+          <canvas 
+            id="viewerCanvas"
+            style="width: ${canvasWidth}; height: ${canvasHeight};"
+          ></canvas>
+          ${
+						this._isLoading
+							? html`<div class="status-overlay">
                 <div class="message">
                   <div class="loader"></div>
                   <p>Loading…</p>
                 </div>
               </div>`
-            : ""}
-          ${this._errorMessage
-            ? html`<div class="status-overlay">
+							: ""
+					}
+          ${
+						this._errorMessage
+							? html`<div class="status-overlay">
                 <div class="message error-message">
                   <p>Error: ${this._errorMessage}</p>
                   <button
                     class="ctrl-btn"
                     @click=${() => {
-                      this._errorMessage = null;
-                      this._resetViewerState();
-                    }}
+											this._errorMessage = null;
+											this._resetViewerState();
+										}}
                   >
                     Dismiss
                   </button>
                 </div>
               </div>`
-            : ""}
+							: ""
+					}
         </main>
 
         <!-- Floating bottom toolbar -->
@@ -462,8 +689,9 @@ export class PdfViewer extends LitElement {
               class="ctrl-btn icon-only"
               title="Next page"
               @click=${this._goToNextPage}
-              ?disabled=${this._currentPageNumber >= this._totalPages ||
-              !canNav}
+              ?disabled=${
+								this._currentPageNumber >= this._totalPages || !canNav
+							}
             >
               <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
@@ -495,7 +723,7 @@ export class PdfViewer extends LitElement {
                 min="0.5"
                 max="3"
                 step="0.05"
-                .value=${this._currentScale.toString()}
+                .value=${this._displayScale.toString()}
                 @input=${this._handleZoomSliderChange}
                 ?disabled=${!canNav}
                 aria-label="Zoom level"
@@ -506,5 +734,5 @@ export class PdfViewer extends LitElement {
         </div>
       </div>
     `;
-  }
+	}
 }
