@@ -1,5 +1,13 @@
 # @quincarter/document-viewer
 
+## 0.1.4
+
+### Patch Changes
+
+- Fixed bug with CBZ Viewer from test updates
+- Updated dependencies
+  - @quincarter/document-viewer@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes
