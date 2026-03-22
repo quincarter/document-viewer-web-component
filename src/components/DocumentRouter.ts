@@ -5,9 +5,10 @@ import { property, state } from "lit/decorators.js";
 import "./pdf/pdf-viewer";
 import "./epub/epub-viewer";
 import "./cbz/cbz-viewer";
+import "./tiff/TiffViewer";
 import { DocumentViewerStyles } from "./document-viewer.styles";
 
-type SupportedFileType = "pdf" | "epub" | "cbz" | "unknown";
+type SupportedFileType = "pdf" | "epub" | "cbz" | "tiff" | "unknown";
 
 export class DocumentRouter extends LitElement {
 	@property({ type: String })
@@ -51,6 +52,21 @@ export class DocumentRouter extends LitElement {
 				header[3] === 0x46 && // F
 				header[4] === 0x2d; // -
 
+			// Check for TIFF signature
+			// Little-endian: 49 49 2A 00
+			// Big-endian: 4D 4D 00 2A
+			// BigTIFF Little-endian: 49 49 2B 00
+			// BigTIFF Big-endian: 4D 4D 00 2B
+			const isTIFF =
+				(header[0] === 0x49 &&
+					header[1] === 0x49 &&
+					(header[2] === 0x2a || header[2] === 0x2b) &&
+					header[3] === 0x00) ||
+				(header[0] === 0x4d &&
+					header[1] === 0x4d &&
+					header[2] === 0x00 &&
+					(header[3] === 0x2a || header[3] === 0x2b));
+
 			// Check for EPUB signature (PK\x03\x04 for ZIP, which EPUB uses)
 			const isPKZip =
 				buffer.byteLength > 58 &&
@@ -63,6 +79,8 @@ export class DocumentRouter extends LitElement {
 
 			if (isPDF) {
 				this.fileType = "pdf";
+			} else if (isTIFF) {
+				this.fileType = "tiff";
 			} else if (isPKZip && extension === "epub") {
 				this.fileType = "epub";
 			} else if (isPKZip && extension === "cbz") {
@@ -81,6 +99,8 @@ export class DocumentRouter extends LitElement {
 		switch (this.fileType) {
 			case "pdf":
 				return html`<pdf-viewer .src=${this.src || null}></pdf-viewer>`;
+			case "tiff":
+				return html`<tiff-viewer .src=${this.src || null}></tiff-viewer>`;
 			case "epub":
 				return html`<epub-viewer .src=${this.src || null}></epub-viewer>`;
 			case "cbz":

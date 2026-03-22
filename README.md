@@ -3,6 +3,7 @@
 This project's goal is to give an all in one approach to rendering documents. Have you ever been overwhelemed developing a product that needs support for more than one file type? Well this document viewer should eventually be the go to for you once i build the remaining support for the remaining file types!
 
 - The PDF Viewer is using a wasm binary for rendering that is highly optimized for rendering. Faster than the PDF.js alternative.
+- The TIFF Viewer uses a WebAssembly port of LibTIFF to support high-performance rendering of multi-page TIFFs, including BigTIFF and CCITT Group 4 compression.
 - The ePub viewer is written entirely in javascript and runs very fast, rendering pages as html for easy highlighting and manipulation.
 - CBZ Files are basically just zipped image payloads arranged in order for a book to make sense. `jszip` is the secret sauce running in a web worker for this to be performant, which extracts images on the fly and renders them to the page.
 
@@ -11,6 +12,7 @@ This project's goal is to give an all in one approach to rendering documents. Ha
 Document support is as follows:
 
 - PDF - Supported
+- TIFF - Supported
 - ePub - Supported
 - CBZ (Comic Books) - Supported
 - Office Files - Coming Soon (doc/docx/ppt/pptx)
@@ -56,6 +58,7 @@ You can import and use the pre-defined elements:
 import { CbzViewer } from "@quincarter/document-viewer/components/cbz/cbz-viewer";
 import { EpubViewer } from "@quincarter/document-viewer/components/epub/epub-viewer";
 import { PdfViewer } from "@quincarter/document-viewer/components/pdf/pdf-viewer";
+import { TiffViewer } from "@quincarter/document-viewer/components/tiff/tiff-viewer";
 ```
 
 ```html
@@ -63,6 +66,7 @@ import { PdfViewer } from "@quincarter/document-viewer/components/pdf/pdf-viewer
 <cbz-viewer src="path/to/comic.cbz"></cbz-viewer>
 <epub-viewer src="path/to/book.epub"></epub-viewer>
 <pdf-viewer src="path/to/document.pdf"></pdf-viewer>
+<tiff-viewer src="path/to/document.tiff"></tiff-viewer>
 ```
 
 Or define your own custom element names:
@@ -72,11 +76,13 @@ Or define your own custom element names:
 import { CbzViewer } from "@quincarter/document-viewer/components/cbz/CbzViewer";
 import { EpubViewer } from "@quincarter/document-viewer/components/epub/EpubViewer";
 import { PdfViewer } from "@quincarter/document-viewer/components/pdf/PdfViewer";
+import { TiffViewer } from "@quincarter/document-viewer/components/tiff/TiffViewer";
 
 // Define your own custom elements
 customElements.define("my-cbz-viewer", CbzViewer);
 customElements.define("my-epub-viewer", EpubViewer);
 customElements.define("my-pdf-viewer", PdfViewer);
+customElements.define("my-tiff-viewer", TiffViewer);
 
 // Use in HTML with your custom names
 <my-cbz-viewer src="path/to/comic.cbz"></my-cbz-viewer>;
@@ -118,7 +124,7 @@ pdfViewer.setZoom(1.5);
 
 ### Basic Usage
 
-The Document Viewer Web Component can handle PDF, ePub, and CBZ files. Simply include the component in your HTML and provide a URL to your document:
+The Document Viewer Web Component can handle PDF, TIFF, ePub, and CBZ files. Simply include the component in your HTML and provide a URL to your document:
 
 ```html
 <!-- Basic usage -->
@@ -139,6 +145,20 @@ The PDF viewer supports:
 - Page-by-page navigation
 - Zoom controls
 - Fast rendering using WebAssembly
+
+### TIFF Files
+
+```html
+<document-viewer src="path/to/document.tiff"></document-viewer>
+```
+
+The TIFF viewer supports:
+
+- Multi-page TIFF navigation
+- BigTIFF support (files > 4GB)
+- CCITT Group 4 bitonal compression
+- High-performance WASM-based decoding
+- Zoom and fit-to-page controls
 
 ### ePub Files
 

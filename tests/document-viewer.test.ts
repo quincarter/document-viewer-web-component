@@ -22,6 +22,10 @@ vi.mock("epubjs", () => ({
 
 import { DocumentRouter } from "../src/components/document-viewer";
 
+interface TestDocumentRouter extends DocumentRouter {
+	fileType: string;
+}
+
 afterEach(() => fixtureCleanup());
 
 describe("DocumentRouter", () => {
@@ -83,13 +87,38 @@ describe("DocumentRouter", () => {
 		// Test the magic bytes detection - we verify this through the rendering behavior
 		// since determineFileType is private
 
-		it("starts with unknown fileType", async () => {
-			const el = await fixture<DocumentRouter>(
-				html`<document-viewer></document-viewer>`,
+		it("detects TIFF file from little-endian signature", async () => {
+			const tiffHeader = new Uint8Array([0x49, 0x49, 0x2a, 0x00]);
+			globalThis.fetch = vi.fn().mockResolvedValue({
+				ok: true,
+				arrayBuffer: () => Promise.resolve(tiffHeader.buffer),
+			} as Response);
+
+			const el = await fixture<TestDocumentRouter>(
+				html`<document-viewer .src=${"test.tiff"}></document-viewer>`,
 			);
 
-			// Without src, should show no-file-provided message
-			expect(el.shadowRoot?.textContent).to.include("No file provided");
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			await el.updateComplete;
+
+			expect(el.fileType).to.equal("tiff");
+		});
+
+		it("detects BigTIFF file from little-endian signature", async () => {
+			const tiffHeader = new Uint8Array([0x49, 0x49, 0x2b, 0x00]);
+			globalThis.fetch = vi.fn().mockResolvedValue({
+				ok: true,
+				arrayBuffer: () => Promise.resolve(tiffHeader.buffer),
+			} as Response);
+
+			const el = await fixture<TestDocumentRouter>(
+				html`<document-viewer .src=${"test.tiff"}></document-viewer>`,
+			);
+
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			await el.updateComplete;
+
+			expect(el.fileType).to.equal("tiff");
 		});
 	});
 });

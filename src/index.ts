@@ -14,3 +14,4 @@ export {
 	saveSettings,
 } from "./components/epub/epub-viewer";
 export * from "./components/pdf/pdf-viewer";
+export * from "./components/tiff/tiff-viewer";

@@ -3,11 +3,42 @@
 import type { JSZipObject } from "jszip";
 import JSZip from "jszip";
 
+interface WorkerPayload {
+	archiveBuffer?: ArrayBuffer;
+	documentId?: string;
+	pageNumber?: number;
+	isSecondPage?: boolean;
+}
+
+interface WorkerInput {
+	type: string;
+	payload: WorkerPayload;
+	messageId?: string | number;
+}
+
+interface WorkerResponse {
+	type: string;
+	success: boolean;
+	messageId?: string | number;
+	documentId?: string | null;
+	totalPages?: number;
+	pageNumber?: number;
+	imageData?: ArrayBuffer;
+	imageMimeType?: string;
+	payload?: WorkerPayload;
+	reason?: string;
+	message?: string;
+	originalType?: string;
+}
+
+// Helper to type self in worker context
+const ctx: Worker = self as unknown as Worker;
+
 let currentZip: JSZip | null = null;
 let sortedImageFiles: JSZipObject[] = [];
 let currentDocumentId: string | null = null;
 const pendingOperations: Set<string | number> = new Set();
-let isLoadingDocument: boolean = false;
+let isLoadingDocument = false;
 
 // Add logging function to track state changes
 function logStateChange(action: string, details: Record<string, unknown> = {}) {
@@ -52,34 +83,21 @@ function naturalSort(a: string, b: string): number {
 	return aParts.length - bParts.length;
 }
 
-interface WorkerPayload {
-	archiveBuffer?: ArrayBuffer;
-	documentId?: string;
-	pageNumber?: number;
-	isSecondPage?: boolean;
-}
-
-interface WorkerInput {
-	type: string;
-	payload: WorkerPayload;
-	messageId?: string | number;
-}
-
 /**
  * Handles incoming messages from the main thread.
  */
-self.onmessage = async (event: MessageEvent<WorkerInput>) => {
+ctx.onmessage = async (event: MessageEvent<WorkerInput>) => {
 	const { type, payload, messageId } = event.data;
 
 	try {
 		switch (type) {
 			case "init":
 				// JSZip is pure JS, so init mainly confirms worker is ready.
-				self.postMessage({
+				ctx.postMessage({
 					type: "cbzWorkerInitialized",
 					success: true,
 					messageId,
-				});
+				} satisfies WorkerResponse);
 				break;
 
 			case "loadCbz": {
@@ -90,12 +108,12 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 
 				// Cancel any pending operations when loading a new document
 				for (const opId of pendingOperations) {
-					self.postMessage({
+					ctx.postMessage({
 						type: "cancelled",
 						messageId: opId,
 						reason: "New document being loaded",
 						success: false,
-					});
+					} satisfies WorkerResponse);
 				}
 				pendingOperations.clear();
 
@@ -139,13 +157,13 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 					totalPages: sortedImageFiles.length,
 				});
 
-				self.postMessage({
+				ctx.postMessage({
 					type: "cbzLoaded",
 					documentId: currentDocumentId,
 					totalPages: sortedImageFiles.length,
 					success: true,
 					messageId,
-				});
+				} satisfies WorkerResponse);
 				break;
 			}
 
@@ -204,7 +222,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				else if (extension === "webp") mimeType = "image/webp";
 
 				// Send raw image buffer and let main thread handle image creation
-				(self as any).postMessage(
+				ctx.postMessage(
 					{
 						type: "cbzPageRendered",
 						documentId: currentDocumentId,
@@ -214,7 +232,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 						payload: payload, // Include the original payload so we keep isSecondPage
 						success: true,
 						messageId,
-					},
+					} satisfies WorkerResponse,
 					[imageBuffer],
 				);
 
@@ -235,7 +253,11 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				currentZip = null;
 				sortedImageFiles = [];
 				currentDocumentId = null;
-				self.postMessage({ type: "cbzClosed", success: true, messageId });
+				ctx.postMessage({
+					type: "cbzClosed",
+					success: true,
+					messageId,
+				} satisfies WorkerResponse);
 				break;
 
 			default:
@@ -244,7 +266,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 		}
 	} catch (error) {
 		console.error("CBZ Worker Error:", error);
-		self.postMessage({
+		ctx.postMessage({
 			type: "error",
 			message:
 				error instanceof Error
@@ -253,20 +275,20 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 			originalType: type,
 			success: false,
 			messageId,
-		});
+		} satisfies WorkerResponse);
 	}
 };
 
 // Handle unhandled promise rejections within the worker
-self.addEventListener("unhandledrejection", (event) => {
+ctx.addEventListener("unhandledrejection", (event) => {
 	console.error("CBZ Worker: Unhandled Promise Rejection:", event.reason);
-	self.postMessage({
+	ctx.postMessage({
 		type: "error",
 		message: `Unhandled promise rejection in CBZ worker: ${
 			(event.reason as Error)?.message || event.reason
 		}`,
 		success: false,
-	});
+	} satisfies WorkerResponse);
 });
 
 console.log("CBZ Worker initialized and ready.");

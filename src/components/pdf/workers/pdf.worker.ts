@@ -6,6 +6,47 @@ import {
 	type PDFiumPage,
 } from "@hyzyla/pdfium";
 
+interface WorkerPayload {
+	wasmUrl?: string;
+	canvas?: OffscreenCanvas;
+	pdfBuffer?: ArrayBuffer | Uint8Array;
+	documentId?: string;
+	pageNumber?: number;
+	scale?: number;
+	fitMode?: "page";
+	containerWidth?: number;
+	containerHeight?: number;
+	bitmap?: ImageBitmap;
+	width?: number;
+	height?: number;
+}
+
+interface WorkerInput {
+	type: string;
+	payload: WorkerPayload;
+	messageId: number;
+}
+
+interface WorkerResponse {
+	type: string;
+	success: boolean;
+	messageId: number;
+	documentId?: string | null;
+	pageCount?: number;
+	pageNumber?: number;
+	width?: number;
+	height?: number;
+	scale?: number;
+	bitmap?: ImageBitmap;
+	error?: {
+		message: string;
+		stack?: string;
+	};
+}
+
+// Helper to type self in worker context
+const ctx: Worker = self as unknown as Worker;
+
 let pdfLibrary: PDFiumLibrary | null = null;
 let currentDocument: PDFiumDocument | null = null;
 let currentDocumentId: string | null = null;
@@ -68,7 +109,7 @@ async function renderPageInternal(
 		}
 
 		// Send back the rendered page info
-		const message = {
+		const response: WorkerResponse = {
 			type: "pageRendered",
 			success: true,
 			messageId,
@@ -80,42 +121,24 @@ async function renderPageInternal(
 		};
 
 		// No longer need to transfer the large bitmap back to main thread
-		(self as any).postMessage(message);
+		ctx.postMessage(response);
 	} catch (error) {
 		console.error("Error rendering page:", error);
-		(self as any).postMessage({
+		ctx.postMessage({
 			type: "pageRendered",
 			success: false,
 			messageId,
-			error: error instanceof Error ? error.message : "Unknown error",
-		});
+			error: {
+				message: error instanceof Error ? error.message : "Unknown error",
+			},
+		} satisfies WorkerResponse);
 	}
-}
-
-interface WorkerPayload {
-	wasmUrl?: string;
-	canvas?: OffscreenCanvas;
-	pdfBuffer?: ArrayBuffer | Uint8Array;
-	documentId?: string;
-	pageNumber?: number;
-	scale?: number;
-	fitMode?: "width";
-	containerWidth?: number;
-	bitmap?: ImageBitmap;
-	width?: number;
-	height?: number;
-}
-
-interface WorkerInput {
-	type: string;
-	payload: WorkerPayload;
-	messageId: number;
 }
 
 /**
  * Handles incoming messages from the main thread.
  */
-self.onmessage = async (event: MessageEvent<WorkerInput>) => {
+ctx.onmessage = async (event: MessageEvent<WorkerInput>) => {
 	const { type, payload, messageId } = event.data;
 
 	try {
@@ -136,11 +159,11 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 						throw error;
 					}
 				}
-				(self as any).postMessage({
+				ctx.postMessage({
 					type: "libraryInitialized",
 					success: true,
 					messageId,
-				});
+				} satisfies WorkerResponse);
 				break;
 
 			case "initCanvas":
@@ -206,13 +229,13 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 					currentPageNumber = 0;
 					currentScale = 1.0;
 
-					(self as any).postMessage({
+					ctx.postMessage({
 						type: "pdfLoaded",
 						documentId: currentDocumentId,
 						pageCount: pageCount,
 						success: true,
 						messageId,
-					});
+					} satisfies WorkerResponse);
 				} catch (error) {
 					currentDocument = null;
 					currentDocumentId = null;
@@ -225,19 +248,22 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				if (!currentDocument) {
 					throw new Error("No PDF document loaded.");
 				}
-				const { pageNumber, scale, fitMode, containerWidth } = payload;
+				const { pageNumber, scale, fitMode, containerWidth, containerHeight } =
+					payload;
 				if (pageNumber === undefined) {
 					throw new Error("pageNumber is required for renderPage.");
 				}
 
 				let targetScale = scale !== undefined ? scale : currentScale;
 
-				if (fitMode === "width" && containerWidth) {
+				if (fitMode === "page" && containerWidth && containerHeight) {
 					const page: PDFiumPage = currentDocument.getPage(pageNumber);
-					const { originalWidth } = page.getOriginalSize();
+					const { originalWidth, originalHeight } = page.getOriginalSize();
+					const scaleWidth = containerWidth / originalWidth;
+					const scaleHeight = containerHeight / originalHeight;
 					const newScale = Math.max(
 						0.5,
-						Math.min(3, containerWidth / originalWidth),
+						Math.min(3, Math.min(scaleWidth, scaleHeight)),
 					);
 					targetScale = Math.round(newScale * 100) / 100;
 				}
@@ -252,7 +278,9 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				}
 				const { pageNumber, scale } = payload;
 				if (pageNumber === undefined || scale === undefined) {
-					throw new Error("pageNumber and scale are required for renderToBitmap.");
+					throw new Error(
+						"pageNumber and scale are required for renderToBitmap.",
+					);
 				}
 
 				const page: PDFiumPage = currentDocument.getPage(pageNumber);
@@ -273,7 +301,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				);
 				const bitmap = await createImageBitmap(imageData);
 
-				(self as any).postMessage(
+				ctx.postMessage(
 					{
 						type: "pageToBitmap",
 						success: true,
@@ -283,7 +311,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 						bitmap,
 						width,
 						height,
-					},
+					} satisfies WorkerResponse,
 					[bitmap],
 				);
 				break;
@@ -295,7 +323,9 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				}
 				const { bitmap, width, height, pageNumber, scale } = payload;
 				if (!bitmap || width === undefined || height === undefined) {
-					throw new Error("bitmap, width and height are required for drawBitmap.");
+					throw new Error(
+						"bitmap, width and height are required for drawBitmap.",
+					);
 				}
 
 				offscreenCanvas.width = width;
@@ -307,7 +337,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 					bitmap.close();
 				}
 
-				(self as any).postMessage({
+				ctx.postMessage({
 					type: "pageRendered", // Re-use pageRendered type for UI consistency
 					success: true,
 					messageId,
@@ -315,7 +345,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 					width,
 					height,
 					scale,
-				});
+				} satisfies WorkerResponse);
 				break;
 			}
 
@@ -324,15 +354,17 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 					throw new Error("No PDF document loaded.");
 				}
 
-				const { scale, fitMode, containerWidth } = payload;
+				const { scale, fitMode, containerWidth, containerHeight } = payload;
 				let targetScale = scale;
 
-				if (fitMode === "width" && containerWidth) {
+				if (fitMode === "page" && containerWidth && containerHeight) {
 					const page: PDFiumPage = currentDocument.getPage(currentPageNumber);
-					const { originalWidth } = page.getOriginalSize();
+					const { originalWidth, originalHeight } = page.getOriginalSize();
+					const scaleWidth = containerWidth / originalWidth;
+					const scaleHeight = containerHeight / originalHeight;
 					const newScale = Math.max(
 						0.5,
-						Math.min(3, containerWidth / originalWidth),
+						Math.min(3, Math.min(scaleWidth, scaleHeight)),
 					);
 					targetScale = Math.round(newScale * 100) / 100;
 				}
@@ -350,27 +382,31 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 		}
 	} catch (error) {
 		console.error(`PDF Worker Error:`, error);
-		(self as any).postMessage({
+		ctx.postMessage({
 			type: "error",
 			messageId,
+			success: false,
 			error: {
 				message: (error as Error).message,
 				stack: (error as Error).stack,
 			},
-		});
+		} satisfies WorkerResponse);
 	}
 };
 
 // Optional: Handle unhandled promise rejections within the worker
-self.addEventListener("unhandledrejection", (event) => {
+ctx.addEventListener("unhandledrejection", (event) => {
 	console.error("PDF Worker: Unhandled Promise Rejection:", event.reason);
-	(self as any).postMessage({
+	ctx.postMessage({
 		type: "error",
-		message: `Unhandled promise rejection: ${
-			(event.reason as Error)?.message || event.reason
-		}`,
+		messageId: -1,
 		success: false,
-	});
+		error: {
+			message: `Unhandled promise rejection: ${
+				(event.reason as Error)?.message || event.reason
+			}`,
+		},
+	} satisfies WorkerResponse);
 });
 
 console.log("PDF Worker initialized and ready.");

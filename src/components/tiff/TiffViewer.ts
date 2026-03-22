@@ -1,12 +1,11 @@
-// src/components/pdf/PdfViewer.ts
+// src/components/tiff/TiffViewer.ts
 
-import pdfiumWasmUrl from "@hyzyla/pdfium/pdfium.wasm?url";
 import type { PropertyValueMap } from "lit";
-import { query } from "lit/decorators.js";
+import { customElement, query } from "lit/decorators.js";
 import { BaseDocumentViewer } from "../common/BaseDocumentViewer";
-import { PdfViewerStyles } from "./pdf-viewer.styles";
+import { TiffViewerStyles } from "./tiff-viewer.styles";
 // Import worker instances (Vite inline worker syntax)
-import PdfWorker from "./workers/pdf.worker?worker&inline";
+import TiffWorker from "./workers/tiff.worker?worker&inline";
 
 interface DocumentWorker extends Worker {
 	postMessage(message: unknown, transfer: Transferable[]): void;
@@ -17,7 +16,7 @@ interface HTMLCanvasElementWithOffscreen extends HTMLCanvasElement {
 	transferControlToOffscreen(): OffscreenCanvas;
 }
 
-interface WorkerMessage {
+export interface WorkerMessage {
 	type: string;
 	success?: boolean;
 	messageId?: number;
@@ -31,7 +30,7 @@ interface WorkerMessage {
 	error?: { message: string };
 }
 
-interface PdfRenderPayload {
+interface TiffRenderPayload {
 	pageNumber: number;
 	scale: number;
 	documentId: string | null;
@@ -40,80 +39,77 @@ interface PdfRenderPayload {
 	containerHeight?: number;
 }
 
-export class PdfViewer extends BaseDocumentViewer {
+@customElement("tiff-viewer")
+export class TiffViewer extends BaseDocumentViewer {
 	@query("#viewerCanvas")
 	protected _canvas!: HTMLCanvasElement;
 
-	private _pdfWorkers: DocumentWorker[] = [];
-	private _workerMessageIdCounter = 0;
-	private _pendingWorkerMessages = new Map<
+	protected _tiffWorkers: DocumentWorker[] = [];
+	protected _workerMessageIdCounter = 0;
+	protected _pendingWorkerMessages = new Map<
 		number,
 		(value: WorkerMessage) => void
 	>();
-	private _pendingFileLoad: { source: string | File } | null = null;
+	protected _pendingFileLoad: { source: string | File } | null = null;
 
-	private _pageCache = new Map<
+	protected _pageCache = new Map<
 		number,
 		{ bitmap: ImageBitmap; width: number; height: number; scale: number }
 	>();
-	private _prefetchQueue: number[] = [];
-	private _busyWorkers = new Set<DocumentWorker>();
-	private _initializedWorkersCount = 0;
-	private readonly _poolSize = 4;
-	private _currentDocumentId: string | null = null;
+	protected _prefetchQueue: number[] = [];
+	protected _busyWorkers = new Set<DocumentWorker>();
+	protected _initializedWorkersCount = 0;
+	protected readonly _poolSize = 4;
+	protected _currentDocumentId: string | null = null;
 
-	static styles = [...BaseDocumentViewer.styles, PdfViewerStyles];
+	static styles = [...BaseDocumentViewer.styles, TiffViewerStyles];
 
 	constructor() {
 		super();
-		this.viewerTitle = "PDF Viewer";
+		this.viewerTitle = "TIFF Viewer";
 		this._initializeWorkers();
 	}
 
-	private _initializeWorkers() {
+	protected _initializeWorkers() {
 		// Clean up existing workers if any
-		for (const worker of this._pdfWorkers) {
+		for (const worker of this._tiffWorkers) {
 			worker.terminate();
 		}
-		this._pdfWorkers = [];
+		this._tiffWorkers = [];
 		this._busyWorkers.clear();
 		this._initializedWorkersCount = 0;
 
-		const wasmUrl = new URL(pdfiumWasmUrl, window.location.origin).toString();
-
 		for (let i = 0; i < this._poolSize; i++) {
-			const worker = new PdfWorker() as DocumentWorker;
+			const worker = new TiffWorker() as DocumentWorker;
 			worker.onmessage = (e) =>
-				this._handleWorkerMessage(e.data as WorkerMessage, `PDF-${i}`);
-			worker.onerror = (e) => this._handleWorkerError(e, `PDF-${i}`);
+				this._handleWorkerMessage(e.data as WorkerMessage, `TIFF-${i}`);
+			worker.onerror = (e) => this._handleWorkerError(e, `TIFF-${i}`);
 
-			this._pdfWorkers.push(worker);
+			this._tiffWorkers.push(worker);
 
-			this._sendMessageToWorker(worker, "init", {
-				wasmUrl: wasmUrl,
-			});
+			this._sendMessageToWorker(worker, "init", {});
 		}
 	}
 
 	connectedCallback() {
 		super.connectedCallback();
-		if (this._pdfWorkers.length === 0) this._initializeWorkers();
+		if (this._tiffWorkers.length === 0) this._initializeWorkers();
 	}
 
 	disconnectedCallback() {
 		super.disconnectedCallback();
-		for (const worker of this._pdfWorkers) {
+		for (const worker of this._tiffWorkers) {
 			worker.terminate();
 		}
-		this._pdfWorkers = [];
+		this._tiffWorkers = [];
 		for (const resolve of this._pendingWorkerMessages.values()) {
-			resolve({ type: "error", message: "Worker terminated" });
+			resolve({ type: "error", error: { message: "Worker terminated" } });
 		}
 		this._pendingWorkerMessages.clear();
 		this._clearPageCache();
 	}
 
-	private _clearPageCache() {
+	protected _clearPageCache() {
 		for (const entry of this._pageCache.values()) {
 			entry.bitmap.close();
 		}
@@ -126,9 +122,8 @@ export class PdfViewer extends BaseDocumentViewer {
 		super.firstUpdated(changedProperties);
 
 		if (this._canvas) {
-			const mainWorker = this._pdfWorkers[0];
+			const mainWorker = this._tiffWorkers[0];
 			const canvas = this._canvas as HTMLCanvasElementWithOffscreen;
-			// Transfer control to worker for off-main-thread rendering
 			if (
 				"transferControlToOffscreen" in canvas &&
 				mainWorker &&
@@ -142,22 +137,13 @@ export class PdfViewer extends BaseDocumentViewer {
 					);
 				} catch (error) {
 					console.error(
-						"PDF Viewer: Failed to transfer control to offscreen canvas.",
+						"TIFF Viewer: Failed to transfer control to offscreen canvas.",
 						error,
 					);
 					this._errorMessage =
 						"Failed to initialize high-performance rendering.";
 				}
-			} else {
-				console.warn(
-					"PDF Viewer: OffscreenCanvas not supported in this browser.",
-				);
-				this._errorMessage =
-					"Your browser does not support high-performance rendering.";
 			}
-		} else {
-			console.error("PDF Viewer: Canvas element not found.");
-			this._errorMessage = "Canvas element could not be initialized.";
 		}
 	}
 
@@ -169,7 +155,6 @@ export class PdfViewer extends BaseDocumentViewer {
 
 	protected async _loadFile(source: string | File) {
 		if (!this._isInitialized) {
-			console.log("Waiting for PDFium initialization...");
 			this._pendingFileLoad = { source };
 			return;
 		}
@@ -190,27 +175,14 @@ export class PdfViewer extends BaseDocumentViewer {
 				buffer = await source.arrayBuffer();
 			}
 
-			// Check if it's a PDF
-			const header = new Uint8Array(buffer.slice(0, 5));
-			const isPDF =
-				header[0] === 0x25 && // %
-				header[1] === 0x50 && // P
-				header[2] === 0x44 && // D
-				header[3] === 0x46 && // F
-				header[4] === 0x2d; // -
-
-			if (!isPDF) {
-				throw new Error("Not a valid PDF file");
+			if (this._tiffWorkers.length === 0) {
+				throw new Error("TIFF workers not initialized");
 			}
 
-			if (this._pdfWorkers.length === 0) {
-				throw new Error("PDF workers not initialized");
-			}
-
-			// Load the PDF into all workers
-			const loadPromises = this._pdfWorkers.map((worker) => {
-				return this._sendMessageToWorker(worker, "loadPdf", {
-					pdfBuffer: buffer,
+			// Load the TIFF into all workers
+			const loadPromises = this._tiffWorkers.map((worker) => {
+				return this._sendMessageToWorker(worker, "loadTiff", {
+					tiffBuffer: buffer, // Cloned for each worker
 					documentId: this._currentDocumentId,
 				});
 			});
@@ -225,11 +197,10 @@ export class PdfViewer extends BaseDocumentViewer {
 		if (this._totalPages === 0 || this._isLoading) return;
 		this._errorMessage = null;
 
-		const pageNumToRender = this._currentPageNumber - 1; // Workers use 0-indexed
+		const pageNumToRender = this._currentPageNumber - 1;
 
-		// Check cache
 		const cached = this._pageCache.get(pageNumToRender);
-		const mainWorker = this._pdfWorkers[0];
+		const mainWorker = this._tiffWorkers[0];
 
 		if (!this._isFitToView && cached && cached.scale === this._displayScale) {
 			createImageBitmap(cached.bitmap).then((clonedBitmap) => {
@@ -250,7 +221,7 @@ export class PdfViewer extends BaseDocumentViewer {
 		}
 
 		if (mainWorker) {
-			const payload: PdfRenderPayload = {
+			const payload: TiffRenderPayload = {
 				pageNumber: pageNumToRender,
 				scale: this._displayScale,
 				documentId: this._currentDocumentId,
@@ -263,17 +234,12 @@ export class PdfViewer extends BaseDocumentViewer {
 			}
 
 			this._sendMessageToWorker(mainWorker, "renderPage", payload);
-		} else {
-			this._handleError("PDF worker not initialized");
-			this._isLoading = false;
 		}
 	}
 
 	protected _handleZoomChange(newScale: number): void {
-		// Clear cache on zoom change
 		this._clearPageCache();
-
-		const mainWorker = this._pdfWorkers[0];
+		const mainWorker = this._tiffWorkers[0];
 		if (mainWorker) {
 			this._sendMessageToWorker(mainWorker, "zoom", {
 				scale: newScale,
@@ -286,7 +252,7 @@ export class PdfViewer extends BaseDocumentViewer {
 		containerWidth: number,
 		containerHeight: number,
 	): void {
-		const mainWorker = this._pdfWorkers[0];
+		const mainWorker = this._tiffWorkers[0];
 		if (mainWorker) {
 			this._sendMessageToWorker(mainWorker, "zoom", {
 				fitMode,
@@ -296,29 +262,25 @@ export class PdfViewer extends BaseDocumentViewer {
 		}
 	}
 
-	private _prefetchNextPages() {
+	protected _prefetchNextPages() {
 		if (this._totalPages === 0) return;
 
 		const currentIdx = this._currentPageNumber - 1;
 		const nextPages = [];
-		// Next 5 pages
 		for (let i = 1; i <= 5; i++) {
 			const nextIdx = currentIdx + i;
 			if (nextIdx < this._totalPages) nextPages.push(nextIdx);
 		}
-		// Also keep previous 2 pages
 		for (let i = 1; i <= 2; i++) {
 			const prevIdx = currentIdx - i;
 			if (prevIdx >= 0) nextPages.push(prevIdx);
 		}
 
-		// Filter out pages already in cache
 		const pagesToFetch = nextPages.filter((p) => {
 			const cached = this._pageCache.get(p);
 			return !cached || cached.scale !== this._displayScale;
 		});
 
-		// Clean up cache for pages far away
 		for (const pageIdx of this._pageCache.keys()) {
 			if (Math.abs(pageIdx - currentIdx) > 10) {
 				const entry = this._pageCache.get(pageIdx);
@@ -331,12 +293,11 @@ export class PdfViewer extends BaseDocumentViewer {
 		this._processPrefetchQueue();
 	}
 
-	private _processPrefetchQueue() {
+	protected _processPrefetchQueue() {
 		if (this._prefetchQueue.length === 0) return;
 
-		// Use all workers except the main one for pre-fetching
-		for (let i = 1; i < this._pdfWorkers.length; i++) {
-			const worker = this._pdfWorkers[i];
+		for (let i = 1; i < this._tiffWorkers.length; i++) {
+			const worker = this._tiffWorkers[i];
 			if (!this._busyWorkers.has(worker) && this._prefetchQueue.length > 0) {
 				const pageIdx = this._prefetchQueue.shift();
 				if (pageIdx === undefined) continue;
@@ -354,7 +315,7 @@ export class PdfViewer extends BaseDocumentViewer {
 		}
 	}
 
-	private _handleWorkerMessage(data: WorkerMessage, workerName: string) {
+	protected _handleWorkerMessage(data: WorkerMessage, workerName: string) {
 		const { type, success, messageId } = data;
 
 		if (messageId != null && this._pendingWorkerMessages.has(messageId)) {
@@ -367,13 +328,10 @@ export class PdfViewer extends BaseDocumentViewer {
 		switch (type) {
 			case "libraryInitialized":
 				if (success) {
-					console.log(`${workerName} initialization complete`);
 					this._initializedWorkersCount++;
-
 					if (this._initializedWorkersCount === this._poolSize) {
 						this._isInitialized = true;
 						if (this._pendingFileLoad) {
-							console.log("Processing pending file load");
 							this._loadFile(this._pendingFileLoad.source);
 							this._pendingFileLoad = null;
 						}
@@ -381,24 +339,20 @@ export class PdfViewer extends BaseDocumentViewer {
 				}
 				break;
 
-			case "pdfLoaded":
+			case "tiffLoaded":
 				if (success) {
-					// Only the main worker response is needed for metadata
-					if (workerName === "PDF-0") {
+					if (workerName === "TIFF-0") {
 						this._totalPages = data.pageCount || 0;
-						this._currentDocumentId = data.documentId || null;
 						this._isLoading = false;
-						// Trigger initial page render
 						this._renderCurrentPage();
 					}
 				} else {
-					this._handleError("Failed to load PDF");
+					this._handleError("Failed to load TIFF");
 				}
 				break;
 
 			case "pageRendered":
 				if (success) {
-					// Update scale from worker (relevant for fit-to-view)
 					if (data.scale) {
 						this._currentScale = data.scale;
 						this._displayScale = data.scale;
@@ -408,7 +362,6 @@ export class PdfViewer extends BaseDocumentViewer {
 						this._originalPageHeight = data.height / data.scale;
 					}
 					this._isLoading = false;
-					// Trigger pre-fetching after a successful render
 					this._prefetchNextPages();
 				} else {
 					this._handleError("Failed to render page");
@@ -419,8 +372,6 @@ export class PdfViewer extends BaseDocumentViewer {
 				if (success) {
 					const { pageNumber, bitmap, width, height, scale } = data;
 					if (pageNumber !== undefined && bitmap && width && height && scale) {
-						// Add to cache
-						// If we already have a bitmap for this page at a different scale, close it
 						const existing = this._pageCache.get(pageNumber);
 						if (existing) {
 							existing.bitmap.close();
@@ -433,20 +384,17 @@ export class PdfViewer extends BaseDocumentViewer {
 			case "error":
 				this._handleError(data.error?.message || "Unknown error occurred");
 				break;
-
-			default:
-				console.warn(`Unknown message type from ${workerName} worker:`, data);
 		}
 	}
 
-	private _handleWorkerError(error: Event | ErrorEvent, workerName: string) {
+	protected _handleWorkerError(error: Event | ErrorEvent, workerName: string) {
 		console.error(`Error in ${workerName} worker:`, error);
 		this._handleError(
 			error instanceof ErrorEvent ? error.message : "Worker error occurred",
 		);
 	}
 
-	private _sendMessageToWorker(
+	protected _sendMessageToWorker(
 		worker: DocumentWorker,
 		type: string,
 		payload: unknown,

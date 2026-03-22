@@ -328,6 +328,7 @@ describe("PdfViewer", () => {
 			testEl._totalPages = 5;
 			testEl._currentPageNumber = 1;
 			testEl._currentScale = 1.0;
+			testEl._isFitToView = false;
 
 			const workers = testEl._pdfWorkers;
 			const spy = vi.spyOn(workers[0], "postMessage");
@@ -488,12 +489,14 @@ describe("PdfViewer", () => {
 			testEl._totalPages = 5;
 			testEl._isLoading = false;
 			testEl._originalPageWidth = 800;
+			testEl._originalPageHeight = 1100;
 
-			// Mock content area width
+			// Mock content area width and height
 			const contentArea = el.shadowRoot?.querySelector(
 				".content-area",
 			) as HTMLElement;
 			vi.spyOn(contentArea, "clientWidth", "get").mockReturnValue(1000);
+			vi.spyOn(contentArea, "clientHeight", "get").mockReturnValue(1500);
 
 			await el.updateComplete;
 
@@ -503,7 +506,9 @@ describe("PdfViewer", () => {
 			fitBtn.click();
 
 			expect(testEl._isFitToView).toBe(true);
-			// containerWidth - 32 = 968. 968/800 = 1.21
+			// Width scale: (1000-32)/800 = 1.21
+			// Height scale: (1500-32)/1100 = 1.33
+			// Min scale is 1.21
 			expect(testEl._displayScale).toBeCloseTo(1.21, 2);
 		});
 
