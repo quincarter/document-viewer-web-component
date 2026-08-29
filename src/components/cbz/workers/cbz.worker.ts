@@ -3,6 +3,13 @@
 import type { JSZipObject } from "jszip";
 import JSZip from "jszip";
 
+// `Window.postMessage`'s overloads (from the DOM lib) don't accept a transfer
+// list; the worker's actual `DedicatedWorkerGlobalScope.postMessage` does.
+const postMessageWithTransfer = self.postMessage as (
+	message: unknown,
+	transfer: Transferable[],
+) => void;
+
 let currentZip: JSZip | null = null;
 let sortedImageFiles: JSZipObject[] = [];
 let currentDocumentId: string | null = null;
@@ -100,7 +107,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				pendingOperations.clear();
 
 				// Payload: { archiveBuffer: ArrayBuffer, documentId?: string }
-				if (!payload || !payload.archiveBuffer) {
+				if (!payload?.archiveBuffer) {
 					isLoadingDocument = false;
 					throw new Error("CBZ archiveBuffer not provided.");
 				}
@@ -204,7 +211,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				else if (extension === "webp") mimeType = "image/webp";
 
 				// Send raw image buffer and let main thread handle image creation
-				(self as any).postMessage(
+				postMessageWithTransfer(
 					{
 						type: "cbzPageRendered",
 						documentId: currentDocumentId,

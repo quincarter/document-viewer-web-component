@@ -6,6 +6,13 @@ import {
 	type PDFiumPage,
 } from "@hyzyla/pdfium";
 
+// `Window.postMessage`'s overloads (from the DOM lib) don't accept a transfer
+// list; the worker's actual `DedicatedWorkerGlobalScope.postMessage` does.
+const postMessageWithTransfer = self.postMessage as (
+	message: unknown,
+	transfer: Transferable[],
+) => void;
+
 let pdfLibrary: PDFiumLibrary | null = null;
 let currentDocument: PDFiumDocument | null = null;
 let currentDocumentId: string | null = null;
@@ -80,10 +87,10 @@ async function renderPageInternal(
 		};
 
 		// No longer need to transfer the large bitmap back to main thread
-		(self as any).postMessage(message);
+		self.postMessage(message);
 	} catch (error) {
 		console.error("Error rendering page:", error);
-		(self as any).postMessage({
+		self.postMessage({
 			type: "pageRendered",
 			success: false,
 			messageId,
@@ -121,7 +128,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 	try {
 		switch (type) {
 			case "init":
-				if (!payload || !payload.wasmUrl) {
+				if (!payload?.wasmUrl) {
 					throw new Error("WASM URL not provided for init.");
 				}
 				console.log("Initializing PDFium with WASM URL:", payload.wasmUrl);
@@ -136,7 +143,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 						throw error;
 					}
 				}
-				(self as any).postMessage({
+				self.postMessage({
 					type: "libraryInitialized",
 					success: true,
 					messageId,
@@ -144,7 +151,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				break;
 
 			case "initCanvas":
-				if (!payload || !payload.canvas) {
+				if (!payload?.canvas) {
 					throw new Error("Canvas not provided for initCanvas.");
 				}
 				offscreenCanvas = payload.canvas;
@@ -160,7 +167,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 						'PDF library not initialized. Send "init" message first.',
 					);
 				}
-				if (!payload || !payload.pdfBuffer) {
+				if (!payload?.pdfBuffer) {
 					throw new Error("PDF buffer is required.");
 				}
 
@@ -206,7 +213,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 					currentPageNumber = 0;
 					currentScale = 1.0;
 
-					(self as any).postMessage({
+					self.postMessage({
 						type: "pdfLoaded",
 						documentId: currentDocumentId,
 						pageCount: pageCount,
@@ -275,7 +282,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				);
 				const bitmap = await createImageBitmap(imageData);
 
-				(self as any).postMessage(
+				postMessageWithTransfer(
 					{
 						type: "pageToBitmap",
 						success: true,
@@ -311,7 +318,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 					bitmap.close();
 				}
 
-				(self as any).postMessage({
+				self.postMessage({
 					type: "pageRendered", // Re-use pageRendered type for UI consistency
 					success: true,
 					messageId,
@@ -354,7 +361,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 		}
 	} catch (error) {
 		console.error(`PDF Worker Error:`, error);
-		(self as any).postMessage({
+		self.postMessage({
 			type: "error",
 			messageId,
 			error: {
@@ -368,7 +375,7 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 // Optional: Handle unhandled promise rejections within the worker
 self.addEventListener("unhandledrejection", (event) => {
 	console.error("PDF Worker: Unhandled Promise Rejection:", event.reason);
-	(self as any).postMessage({
+	self.postMessage({
 		type: "error",
 		message: `Unhandled promise rejection: ${
 			(event.reason as Error)?.message || event.reason

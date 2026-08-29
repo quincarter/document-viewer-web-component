@@ -262,7 +262,7 @@ export class EpubManager {
 	}
 
 	async renderPage(pageNumber: number): Promise<string> {
-		if (!this.book || !this.book.spine) {
+		if (!this.book?.spine) {
 			throw new Error("No book loaded or spine not available");
 		}
 
@@ -317,7 +317,7 @@ export class EpubManager {
 	}
 
 	getPageFromHref(href: string): number {
-		if (!this.book || !this.book.spine) {
+		if (!this.book?.spine) {
 			return -1;
 		}
 
