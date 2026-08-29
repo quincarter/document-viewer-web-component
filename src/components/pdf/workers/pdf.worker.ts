@@ -252,7 +252,9 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				}
 				const { pageNumber, scale } = payload;
 				if (pageNumber === undefined || scale === undefined) {
-					throw new Error("pageNumber and scale are required for renderToBitmap.");
+					throw new Error(
+						"pageNumber and scale are required for renderToBitmap.",
+					);
 				}
 
 				const page: PDFiumPage = currentDocument.getPage(pageNumber);
@@ -295,7 +297,9 @@ self.onmessage = async (event: MessageEvent<WorkerInput>) => {
 				}
 				const { bitmap, width, height, pageNumber, scale } = payload;
 				if (!bitmap || width === undefined || height === undefined) {
-					throw new Error("bitmap, width and height are required for drawBitmap.");
+					throw new Error(
+						"bitmap, width and height are required for drawBitmap.",
+					);
 				}
 
 				offscreenCanvas.width = width;
